@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">TaskManagement</string>
+    <string name="facebook_app_id">1191288209366563</string>
+    <string name="fb_login_protocol_scheme">fb1191288209366563</string>
+    <string name="facebook_client_token">c5e6908fc18781ef645fdb0fd90cf2e6</string>
+    <string name="google_web_client_id">63084503455-k3p98g2cb25932trloj5v04f1l57g6dh.apps.googleusercontent.com</string>
+</resources>
