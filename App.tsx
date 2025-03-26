@@ -1,131 +1,113 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, { useState, useEffect } from 'react';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { NavigationContainer } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { NotificationProvider } from './src/utils/NotificationContext';
+import { ThemeProvider } from './src/utils/ThemeContext';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import LoginScreen from './src/pages/LoginScreen';
+import SignupScreen from './src/pages/SignupScreen';
+import ForgotPasswordScreen from './src/pages/ForgotPasswordScreen';
+import Dashboardscreen from './src/pages/Dashboardscreen';
+import TaskScreen from './src/pages/TaskScreen';
+import KanbanBoardScreen from './src/pages/KanbanBoardScreen';
+import ProfileScreen from './src/pages/ProfileScreen';
+import NotificationScreen from './src/pages/NotificationScreen';
+import SettingsScreen from './src/pages/SettingsScreen';
+import AccountScreen from './src/pages/AccountScreen';
+import AdminScreen from './src/pages/AdminScreen';
+import ManagerScreen from './src/pages/ManagerScreen';
+import CalendarScreen from './src/pages/CalendarScreen';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+const AccountStack = createNativeStackNavigator();
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+const TOKEN_KEY = '@auth_token';
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+const AccountStackNavigator = () => (
+  <AccountStack.Navigator screenOptions={{ headerShown: false }}>
+    <AccountStack.Screen name="AccountHome" component={AccountScreen} />
+    <AccountStack.Screen name="Profile" component={ProfileScreen} />
+    <AccountStack.Screen name="Notifications" component={NotificationScreen} />
+    <AccountStack.Screen name="Settings" component={SettingsScreen} />
+  </AccountStack.Navigator>
+);
+
+const DashboardTabs = () => (
+  <Tab.Navigator
+    screenOptions={({ route }) => ({
+      headerShown: false,
+      tabBarShowLabel: false,
+      tabBarStyle: { backgroundColor: '#fff', height: 60, borderTopWidth: 0 },
+      tabBarIcon: ({ size }) => {
+        let iconName;
+        let iconColor;
+        if (route.name === 'Dashboard') {
+          iconName = 'view-dashboard';
+          iconColor = '#007bff';
+        } else if (route.name === 'Tasks') {
+          iconName = 'check-circle-outline';
+          iconColor = '#28a745';
+        } else if (route.name === 'KanbanBoard') {
+          iconName = 'trello';
+          iconColor = '#ff9800';
+        } else if (route.name === 'Admin') {
+          iconName = 'shield-account';
+          iconColor = '#1991d3';
+        } else if (route.name === 'Manager') {
+          iconName = 'account-tie';
+          iconColor = '#1991d3';
+        } else if (route.name === 'Account') {
+          iconName = 'account';
+          iconColor = '#e91e63';
+        }
+        return <Icon name={iconName ?? ''} size={size} color={iconColor} />;
+      },
+    })}
+  >
+    <Tab.Screen name="Dashboard" component={Dashboardscreen} />
+    <Tab.Screen name="Tasks" component={TaskScreen} />
+    <Tab.Screen name="KanbanBoard" component={KanbanBoardScreen} />
+    <Tab.Screen name="Admin" component={AdminScreen} />
+    <Tab.Screen name="Manager" component={ManagerScreen} />
+    <Tab.Screen name="Account" component={AccountStackNavigator} />
+  </Tab.Navigator>
+);
+
+const App = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      setIsAuthenticated(Boolean(token));
+    };
+    checkAuth();
+  }, []);
+
+  if (isAuthenticated === null) return null;
+
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+    <ThemeProvider>
+      <NotificationProvider>
+        <NavigationContainer>
+          <Stack.Navigator
+            screenOptions={{ headerShown: false }}
+            initialRouteName={isAuthenticated ? "DashboardTabs" : "Login"}
+          >
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="DashboardTabs" component={DashboardTabs} />
+            <Stack.Screen name="Calendar" component={CalendarScreen} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </NotificationProvider>
+    </ThemeProvider>
   );
-}
-
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the reccomendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
-
-  return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+};
 
 export default App;
