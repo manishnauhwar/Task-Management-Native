@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, Alert, ScrollView } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
+import React, { useState, useMemo } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
+  FlatList
+} from 'react-native';
 import axiosInstance from '../../utils/axiosinstance';
+
+const pageSize = 5;
 
 const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -13,6 +23,14 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
     role: 'user'
   });
   const [isNewUser, setIsNewUser] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const totalPages = Math.ceil(allUsers.length / pageSize);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return allUsers.slice(start, start + pageSize);
+  }, [allUsers, currentPage, pageSize]);
 
   const handleCreateUser = async () => {
     if (!newUserData.fullname || !newUserData.email || !newUserData.password) {
@@ -22,10 +40,18 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
 
     try {
       const response = await axiosInstance.post('/users/admin/create-user', newUserData);
-
       if (response.status === 201) {
-        const updatedUsers = [...allUsers, response.data.user];
+        const newUser = {
+          id: response.data.user.id || response.data.user._id,
+          fullname: response.data.user.fullname,
+          email: response.data.user.email,
+          role: response.data.user.role
+        };
+        
+        const updatedUsers = [...allUsers, newUser];
         onUsersUpdate(updatedUsers);
+        
+        // Reset form
         setNewUserData({
           fullname: '',
           email: '',
@@ -50,7 +76,6 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
-
     try {
       const updateData = {
         fullname: selectedUserData.fullname,
@@ -62,11 +87,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
         updateData.password = selectedUserData.password;
       }
 
-      const response = await axiosInstance.put(
-        `/users/${selectedUserData.id}`,
-        updateData
-      );
-
+      const response = await axiosInstance.put(`/users/${selectedUserData.id}`, updateData);
       if (response.status === 200) {
         const updatedUsers = allUsers.map(user =>
           user.id === selectedUserData.id ? { ...user, ...updateData } : user
@@ -102,6 +123,14 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                 const updatedUsers = allUsers.filter(user => user.id !== userId);
                 onUsersUpdate(updatedUsers);
                 Alert.alert('Success', 'User deleted successfully!');
+                
+                // Adjust current page if the deletion removes the last item on the last page
+                const newTotalPages = Math.ceil(updatedUsers.length / pageSize);
+                if (currentPage > newTotalPages && newTotalPages > 0) {
+                  setCurrentPage(newTotalPages);
+                } else if (newTotalPages === 0) {
+                  setCurrentPage(1);
+                }
               }
             } catch (error) {
               console.error('Error deleting user:', error);
@@ -113,8 +142,64 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
     );
   };
 
+  // Render each user item showing only name, email, and role
+  const renderUserItem = ({ item }) => (
+    <View style={[styles.userItem, { borderBottomColor: theme.border }]}>
+      <View style={styles.userInfo}>
+        <Text style={[styles.userName, { color: theme.text }]}>{item.fullname}</Text>
+        <Text style={[styles.userEmail, { color: theme.text }]}>{item.email}</Text>
+        <View style={[styles.roleBadge, {
+          backgroundColor:
+            item.role === 'admin' ? theme.danger + '30' :
+            item.role === 'manager' ? theme.warning + '30' :
+            theme.success + '30'
+        }]}>
+          <Text style={[styles.roleText, {
+            color:
+              item.role === 'admin' ? theme.danger :
+              item.role === 'manager' ? theme.warning :
+              theme.success
+          }]}>{item.role}</Text>
+        </View>
+      </View>
+      <View style={styles.userActions}>
+        <TouchableOpacity
+          onPress={() => {
+            setSelectedUserData({
+              id: item.id,
+              fullname: item.fullname,
+              email: item.email,
+              role: item.role,
+              password: ''
+            });
+            setIsNewUser(false);
+            setUserModalOpen(true);
+          }}
+        >
+          <Text style={{ color: theme.primary }}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => handleDeleteUser(item.id)}>
+          <Text style={{ color: theme.danger }}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  // Handlers for pagination
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(prev => prev - 1);
+    }
+  };
+
   return (
-    <>
+    <View>
       <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 20 }]}>User Management</Text>
       <View style={[styles.contentCard, {
         backgroundColor: theme.inputBackground,
@@ -123,45 +208,32 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
         {allUsers.length === 0 ? (
           <Text style={[styles.emptyText, { color: theme.text }]}>No users found.</Text>
         ) : (
-          allUsers.map(u => (
-            <View key={u.id} style={[styles.userItem, { borderBottomColor: theme.border }]}>
-              <View style={styles.userInfo}>
-                <Text style={[styles.userName, { color: theme.text }]}>{u.fullname}</Text>
-                <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{u.email}</Text>
-                <View style={[styles.roleBadge, {
-                  backgroundColor:
-                    u.role === 'admin' ? theme.danger + '30' :
-                    u.role === 'manager' ? theme.warning + '30' :
-                    theme.success + '30'
-                }]}>
-                  <Text style={[styles.roleText, {
-                    color:
-                      u.role === 'admin' ? theme.danger :
-                      u.role === 'manager' ? theme.warning :
-                      theme.success
-                  }]}>{u.role}</Text>
-                </View>
-              </View>
-              <View style={styles.userActions}>
-                <TouchableOpacity onPress={() => {
-                  setSelectedUserData({
-                    id: u.id,
-                    fullname: u.fullname,
-                    email: u.email,
-                    role: u.role,
-                    password: ''
-                  });
-                  setIsNewUser(false);
-                  setUserModalOpen(true);
-                }}>
-                  <Text style={{ color: theme.primary }}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteUser(u.id)}>
-                  <Text style={{ color: theme.danger }}>Delete</Text>
-                </TouchableOpacity>
-              </View>
+          <>
+            <FlatList
+              data={paginatedUsers}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={renderUserItem}
+            />
+            <View style={styles.paginationContainer}>
+              <TouchableOpacity
+                onPress={goToPrevPage}
+                disabled={currentPage === 1}
+                style={[styles.paginationButton, { opacity: currentPage === 1 ? 0.5 : 1 }]}
+              >
+                <Text style={{ color: theme.primary }}>Prev</Text>
+              </TouchableOpacity>
+              <Text style={{ color: theme.text }}>
+                Page {currentPage} of {totalPages || 1}
+              </Text>
+              <TouchableOpacity
+                onPress={goToNextPage}
+                disabled={currentPage === totalPages || totalPages === 0}
+                style={[styles.paginationButton, { opacity: currentPage === totalPages || totalPages === 0 ? 0.5 : 1 }]}
+              >
+                <Text style={{ color: theme.primary }}>Next</Text>
+              </TouchableOpacity>
             </View>
-          ))
+          </>
         )}
         <TouchableOpacity
           style={[styles.button, { backgroundColor: theme.primary, marginTop: 15 }]}
@@ -233,80 +305,37 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
 
             <Text style={[styles.inputLabel, { color: theme.text }]}>Role</Text>
             <View style={styles.roleSelection}>
-              <TouchableOpacity
-                style={[
-                  styles.roleOption,
-                  {
-                    backgroundColor: (isNewUser ? newUserData.role : selectedUserData?.role) === 'user'
-                      ? theme.success + '30'
-                      : theme.inputBackground,
-                    borderColor: theme.border
+              {['user', 'manager', 'admin'].map((role) => (
+                <TouchableOpacity
+                  key={role}
+                  style={[
+                    styles.roleOption,
+                    {
+                      backgroundColor:
+                        (isNewUser ? newUserData.role : selectedUserData?.role) === role
+                          ? theme[role === 'admin' ? 'danger' : role === 'manager' ? 'warning' : 'success'] + '30'
+                          : theme.inputBackground,
+                      borderColor: theme.border
+                    }
+                  ]}
+                  onPress={() => isNewUser
+                    ? setNewUserData(prev => ({ ...prev, role }))
+                    : setSelectedUserData(prev => ({ ...prev, role }))
                   }
-                ]}
-                onPress={() => isNewUser
-                  ? setNewUserData(prev => ({ ...prev, role: 'user' }))
-                  : setSelectedUserData(prev => ({ ...prev, role: 'user' }))
-                }
-              >
-                <Text style={[
-                  styles.roleOptionText,
-                  {
-                    color: (isNewUser ? newUserData.role : selectedUserData?.role) === 'user'
-                      ? theme.success
-                      : theme.textSecondary
-                  }
-                ]}>User</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.roleOption,
-                  {
-                    backgroundColor: (isNewUser ? newUserData.role : selectedUserData?.role) === 'manager'
-                      ? theme.warning + '30'
-                      : theme.inputBackground,
-                    borderColor: theme.border
-                  }
-                ]}
-                onPress={() => isNewUser
-                  ? setNewUserData(prev => ({ ...prev, role: 'manager' }))
-                  : setSelectedUserData(prev => ({ ...prev, role: 'manager' }))
-                }
-              >
-                <Text style={[
-                  styles.roleOptionText,
-                  {
-                    color: (isNewUser ? newUserData.role : selectedUserData?.role) === 'manager'
-                      ? theme.warning
-                      : theme.textSecondary
-                  }
-                ]}>Manager</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.roleOption,
-                  {
-                    backgroundColor: (isNewUser ? newUserData.role : selectedUserData?.role) === 'admin'
-                      ? theme.danger + '30'
-                      : theme.inputBackground,
-                    borderColor: theme.border
-                  }
-                ]}
-                onPress={() => isNewUser
-                  ? setNewUserData(prev => ({ ...prev, role: 'admin' }))
-                  : setSelectedUserData(prev => ({ ...prev, role: 'admin' }))
-                }
-              >
-                <Text style={[
-                  styles.roleOptionText,
-                  {
-                    color: (isNewUser ? newUserData.role : selectedUserData?.role) === 'admin'
-                      ? theme.danger
-                      : theme.textSecondary
-                  }
-                ]}>Admin</Text>
-              </TouchableOpacity>
+                >
+                  <Text style={[
+                    styles.roleOptionText,
+                    {
+                      color:
+                        (isNewUser ? newUserData.role : selectedUserData?.role) === role
+                          ? theme[role === 'admin' ? 'danger' : role === 'manager' ? 'warning' : 'success']
+                          : theme.textSecondary
+                    }
+                  ]}>
+                    {role.charAt(0).toUpperCase() + role.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <View style={styles.modalButtons}>
@@ -346,7 +375,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 };
 
@@ -413,6 +442,16 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  paginationButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
   },
   modalWrapper: {
     flex: 1,

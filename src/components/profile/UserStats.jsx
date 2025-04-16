@@ -1,36 +1,68 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { format, formatDistanceToNow } from 'date-fns';
 
 const UserStats = ({ tasks, theme }) => {
-  const completedTasks = tasks.filter(task => task.status === 'Completed');
-  const pendingTasks = tasks.filter(task => task.status === 'To Do' || task.status === 'In progress');
+  const completedTasks = tasks?.filter(task => task.status?.toLowerCase() === 'completed') || [];
+  const pendingTasks = tasks?.filter(task => 
+    task.status?.toLowerCase() === 'to do' || 
+    task.status?.toLowerCase() === 'in progress'
+  ) || [];
   const completedTaskCount = completedTasks.length;
   const pendingTaskCount = pendingTasks.length;
-  
-  let avgCompletionTime = 0;
-  if (completedTasks.length > 0) {
-    const totalTime = completedTasks.reduce((sum, task) => {
-      if (task.completedAt && task.createdAt) {
-        const start = new Date(task.createdAt);
-        const end = new Date(task.completedAt);
-        return sum + (end - start);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const overdueTasks = tasks?.filter(task => {
+    if (!task.dueDate) return false;
+    try {
+      const dueDate = new Date(task.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      return dueDate < today && task.status?.toLowerCase() !== 'completed';
+    } catch (error) {
+      console.log('Invalid date for task:', task.id);
+      return false;
+    }
+  }).length || 0;
+
+  const highPriorityTasks = tasks?.filter(task => 
+    task.priority?.toLowerCase() === 'high'
+  ).length || 0;
+
+  const calculateAverageUpdateTime = () => {
+    if (!tasks || tasks.length === 0) return "N/A";
+    
+    let totalMinutes = 0;
+    let validTaskCount = 0;
+    
+    tasks.forEach(task => {
+      if (task.createdAt && task.updatedAt) {
+        const createdDate = new Date(task.createdAt);
+        const updatedDate = new Date(task.updatedAt);
+        
+        if (updatedDate > createdDate) {
+          const diffMs = updatedDate - createdDate;
+          const diffMinutes = diffMs / (1000 * 60);
+          totalMinutes += diffMinutes;
+          validTaskCount++;
+        }
       }
-      return sum;
-    }, 0);
-
-    avgCompletionTime = (totalTime / completedTasks.length) / (1000 * 60 * 60);
-  }
-
-  const formatTime = (hours) => {
-    if (hours < 1) {
-      return `${Math.round(hours * 60)} minutes`;
-    } else if (hours < 24) {
-      return `${Math.round(hours * 10) / 10} hours`;
+    });
+    
+    if (validTaskCount === 0) return "N/A";
+    
+    const avgMinutes = Math.round(totalMinutes / validTaskCount);
+    
+    if (avgMinutes < 60) {
+      return `${avgMinutes} mins`;
     } else {
-      return `${Math.round(hours / 24 * 10) / 10} days`;
+      const hours = Math.floor(avgMinutes / 60);
+      const mins = avgMinutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     }
   };
+
+  const averageUpdateTime = calculateAverageUpdateTime();
 
   return (
     <>
@@ -41,7 +73,7 @@ const UserStats = ({ tasks, theme }) => {
       }]}>
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
-            <Text style={[styles.statValue, { color: theme.primary }]}>{tasks.length}</Text>
+            <Text style={[styles.statValue, { color: theme.primary }]}>{tasks?.length || 0}</Text>
             <Text style={[styles.statLabel, { color: theme.text }]}>Total Tasks</Text>
           </View>
           <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
@@ -53,11 +85,11 @@ const UserStats = ({ tasks, theme }) => {
             <Text style={[styles.statLabel, { color: theme.text }]}>Pending</Text>
           </View>
         </View>
-        <View style={[styles.averageTimeCard, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.averageTimeLabel, { color: theme.text }]}>Average Completion Time:</Text>
-          <Text style={[styles.averageTimeValue, { color: theme.primary }]}>
-            {completedTaskCount > 0 ? formatTime(avgCompletionTime) : 'N/A'}
-          </Text>
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: theme.cardBackground, flex: 1 }]}>
+            <Text style={[styles.statValue, { color: theme.primary }]}>{averageUpdateTime}</Text>
+            <Text style={[styles.statLabel, { color: theme.text }]}>Avg. Update Time</Text>
+          </View>
         </View>
       </View>
     </>
@@ -67,50 +99,40 @@ const UserStats = ({ tasks, theme }) => {
 const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginBottom: 10,
   },
   contentCard: {
-    borderRadius: 8,
-    padding: 15,
-    marginBottom: 20,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 15,
     borderWidth: 1,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 15,
+    marginBottom: 10,
   },
   statCard: {
-    flex: 1,
-    borderRadius: 5,
+    borderRadius: 8,
     padding: 10,
+    flex: 1,
+    marginHorizontal: 3,
     alignItems: 'center',
-    marginHorizontal: 5,
+    justifyContent: 'center',
+    elevation: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 5,
   },
   statLabel: {
     fontSize: 12,
+    marginTop: 4,
   },
-  averageTimeCard: {
-    borderRadius: 5,
-    padding: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  averageTimeLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  averageTimeValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  }
 });
 
 export default UserStats;

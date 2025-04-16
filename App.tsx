@@ -41,7 +41,8 @@ const AccountStackNavigator = () => (
 
 const DashboardTabs = () => {
   const { theme } = useTheme();
-  const [userRole, setUserRole] = useState(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [initialRouteName, setInitialRouteName] = useState<string>('Dashboard');
 
   useEffect(() => {
     const getUserData = async () => {
@@ -56,11 +57,33 @@ const DashboardTabs = () => {
       }
     };
 
+    const getActiveTab = async () => {
+      try {
+        const activeTab = await AsyncStorage.getItem('@active_tab');
+        if (activeTab) {
+          setInitialRouteName(activeTab);
+        }
+      } catch (error) {
+        console.error("Error fetching active tab:", error);
+      }
+    };
+
     getUserData();
+    getActiveTab();
   }, []);
+
+  // Function to save the current tab
+  const saveCurrentTab = async (tabName: string) => {
+    try {
+      await AsyncStorage.setItem('@active_tab', tabName);
+    } catch (error) {
+      console.error("Error saving active tab:", error);
+    }
+  };
 
   return (
     <Tab.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
@@ -101,6 +124,12 @@ const DashboardTabs = () => {
           return <Icon name={iconName} size={size} color={iconColor} />;
         },
       })}
+      screenListeners={{
+        state: (e) => {
+          const currentRouteName = e.data.state.routes[e.data.state.index].name;
+          saveCurrentTab(currentRouteName);
+        },
+      }}
     >
       <Tab.Screen name="Dashboard" component={Dashboardscreen} />
       <Tab.Screen name="Tasks" component={TaskScreen} />
