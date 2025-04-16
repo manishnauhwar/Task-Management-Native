@@ -1,0 +1,461 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const resources = {
+  en: {
+    translation: {
+      settings: {
+        title: 'Settings',
+        appearance: 'Appearance',
+        darkMode: 'Dark Mode',
+        darkModeDesc: 'Switch between light and dark theme',
+        notifications: 'Notifications',
+        emailNotifications: 'Email Notifications',
+        emailDesc: 'Receive updates via email',
+        appNotifications: 'In-App Notifications',
+        appDesc: 'Receive notifications within the app',
+        language: 'Language',
+        selectedLanguage: 'Selected Language',
+        selectLanguage: 'Select Language',
+      },
+      account: {
+        heading: 'Account',
+        profile: 'Profile',
+        notifications: 'Notifications',
+        settings: 'Settings',
+        logout: 'Logout',
+        logoutAlertTitle: 'Logout',
+        logoutAlertMessage: 'Are you sure you want to logout?',
+        cancel: 'Cancel',
+      },
+      charts: {
+        statusDistribution: 'Status Distribution',
+        priorityDistribution: 'Priority Distribution',
+        monthlyTaskCompletion: 'Monthly Task Completion',
+        allTasksAnalytics: 'All Tasks Analytics',
+        teamTasksAnalytics: 'Team Tasks Analytics',
+        myTasksAnalytics: 'My Tasks Analytics',
+        legend: {
+          completed: 'Completed',
+          pending: 'Pending',
+          overdue: 'Overdue',
+          high: 'High',
+          medium: 'Medium',
+          low: 'Low',
+          total: 'Total',
+        },
+      },
+      taskcards: {
+        addNewTask: "Add New Task",
+        pleaseEnterTaskTitle: "Please enter a task title",
+        pleaseEnterTaskDescription: "Please enter a task description",
+        invalidDate: "Please enter a valid date in MM/DD/YYYY format",
+        unableToDetermineUser: "Unable to determine your user ID. Please log out and log in again.",
+        failedToGetUserData: "Failed to get user data. Please try again.",
+        failedToAddTask: "Failed to add task. Please try again.",
+        titleLabel: "Title *",
+        descriptionLabel: "Description *",
+        priorityLabel: "Priority:",
+        dueDateLabel: "Due Date (MM/DD/YYYY):",
+        cancel: "Cancel",
+        addTask: "Add Task"
+      },
+      sortFilter: {
+        searchPlaceholder: "Search by title...",
+        sort: "Sort",
+        sortBy: "Sort By",
+        order: "Order",
+        sortField: {
+          status: "Status",
+          priority: "Priority"
+        },
+        sortOrder: {
+          asc: "Ascending",
+          desc: "Descending"
+        },
+        filter: "Filter",
+        filterStatusTitle: "Status",
+        filterPriorityTitle: "Priority",
+        filterStatus: {
+          all: "All",
+          toDo: "To Do",
+          inProgress: "In Progress",
+          completed: "Completed",
+          overdue: "Overdue"
+        },
+        filterPriority: {
+          all: "All",
+          low: "Low",
+          medium: "Medium",
+          high: "High"
+        }
+      },
+      taskTable: {
+        addNewTask: "Add New Task",
+        errorFetch: "Failed to load tasks. Please try again.",
+        statusUpdated: "Task marked as {{status}}",
+        failedStatusUpdate: "Failed to update task status",
+        taskUpdated: "Task updated successfully",
+        failedUpdate: "Failed to update task",
+        taskDeleted: "Task deleted successfully",
+        failedDelete: "Failed to delete task. You may not have permission.",
+        pleaseEnterTitle: "Please enter a task title",
+        taskAdded: "Task added successfully",
+        failedAdd: "Failed to add task",
+        loading: "Loading tasks...",
+        noTasks: "No tasks found",
+        header: {
+          title: "Title",
+          status: "Status",
+          priority: "Priority",
+          done: "Done"
+        },
+        dialog: {
+          detailsTitle: "Task Details",
+          title: "Title",
+          description: "Description",
+          status: "Status",
+          priority: "Priority",
+          dueDate: "Due Date",
+          noDescription: "No description provided",
+          noDueDate: "No due date",
+          delete: "Delete",
+          deleteTitle: "Delete Task",
+          deleteMessage: "Are you sure you want to delete \"{{title}}\"?",
+          cancel: "Cancel",
+          edit: "Edit",
+          close: "Close",
+          editTitle: "Edit Task",
+          save: "Save",
+          addTitle: "Add New Task",
+          addTask: "Add Task",
+          dismiss: "Dismiss"
+        },
+        input: {
+          title: "Title *",
+          description: "Description",
+          priority: "Priority",
+          dueDate: "Due Date (MM/DD/YYYY)",
+          select: "Select"
+        }
+      },
+      kanban: {
+        boardTitle: "Kanban Board",
+        tasksOverview: "Tasks Overview",
+        status: {
+          toDo: "To Do",
+          inProgress: "In Progress",
+          completed: "Completed"
+        }
+      },
+      taskCard: {
+        noDueDate: "No due date",
+        normal: "Normal",
+        unknown: "Unknown",
+        due: "Due",
+        created: "Created",
+        moveTo: "Move to:"
+      },
+      statusPage: {
+        noTasks: "No tasks in this status"
+      },
+      tasksProvider: {
+        error: "Error",
+        failedLoadUser: "Failed to load user information",
+        ok: "OK",
+        sessionExpired: "Session Expired",
+        loginAgain: "Please login again to continue",
+        failedLoadTasks: "Failed to load tasks. Please try again.",
+        failedStatusUpdate: "Failed to update task status"
+      },
+      user: {
+        "allTasks": "All Tasks",
+        "completed": "Completed",
+        "toDo": "To Do",
+        "inProgress": "In Progress",
+        "tasks": "Tasks",
+        "myTasks": "My Tasks",
+        "failedToLoadUser": "Failed to load user information",
+        "failedToLoadTasks": "Failed to load tasks",
+        "noTasksFound": "No tasks found",
+        "noDate": "No date",
+        "invalidDate": "Invalid date",
+        "noPriority": "No priority"
+      },
+        manager: {
+          "noDueDate": "No due date",
+          "dropHint": "Drop on member to assign",
+          "normalPriority": "Normal",
+          "teamMembers": "Team Member",
+          "tasksToAssign": "Tasks to Assign",
+          "noTasksAvailable": "No tasks available to assign",
+          "taskAssigned": "Task Assigned",
+          "taskAssignedMsg": "Manager has assigned you a new task \"{{title}}\" ",
+          "assignmentFailed": "Assignment Failed",
+          "assignmentFailedMsg": "There was a problem assigning the task. Please try again.",
+          "noMemberSelected": "No Member Selected",
+          "dropTaskHint": "Drop the task directly on a team member card to assign it.",
+          "defaultTeamMember": "Team Member",
+           "assignmentSuccess": "Task Assigned Successfully",
+    "assignmentSuccessMsg": "The task has been assigned to {{memberName}} successfully."
+          
+        },
+        notifications: {
+          "title": "Notifications",
+          "noNotifications": "No notifications yet",
+          "deleteTitle": "Delete Notification",
+          "deleteMessage": "Are you sure you want to delete this notification?"
+        },
+        "common": {
+          "cancel": "Cancel",
+          "delete": "Delete"
+        }
+      }
+  },
+  hi: {
+    translation: {
+      settings: {
+        title: 'सेटिंग्स',
+        appearance: 'दिखावट',
+        darkMode: 'डार्क मोड',
+        darkModeDesc: 'लाइट और डार्क थीम के बीच स्विच करें',
+        notifications: 'सूचनाएं',
+        emailNotifications: 'ईमेल सूचनाएं',
+        emailDesc: 'ईमेल के माध्यम से अद्यतन प्राप्त करें',
+        appNotifications: 'ऐप में सूचनाएं',
+        appDesc: 'ऐप के अंदर सूचनाएं प्राप्त करें',
+        language: 'भाषा',
+        selectedLanguage: 'चुनी गई भाषा',
+        selectLanguage: 'भाषा का चयन करें',
+      },
+      account: {
+        heading: 'खाता',
+        profile: 'प्रोफ़ाइल',
+        notifications: 'सूचनाएं',
+        settings: 'सेटिंग्स',
+        logout: 'लॉगआउट',
+        logoutAlertTitle: 'लॉगआउट',
+        logoutAlertMessage: 'क्या आप वाकई लॉगआउट करना चाहते हैं?',
+        cancel: 'रद्द करें',
+      },
+      charts: {
+        statusDistribution: 'स्थिति वितरण',
+        priorityDistribution: 'प्राथमिकता वितरण',
+        monthlyTaskCompletion: 'मासिक कार्य पूर्णता',
+        allTasksAnalytics: 'सभी कार्यों का विश्लेषण',
+        teamTasksAnalytics: 'टीम के कार्यों का विश्लेषण',
+        myTasksAnalytics: 'मेरे कार्यों का विश्लेषण',
+        legend: {
+          completed: 'पूर्ण',
+          pending: 'अनुरोध पर',
+          overdue: 'देरी',
+          high: 'उच्च',
+          medium: 'मध्यम',
+          low: 'निम्न',
+          total: 'कुल',
+        },
+      },
+      taskcards: {
+        addNewTask: "नई कार्य जोड़ें",
+        pleaseEnterTaskTitle: "कृपया कार्य का शीर्षक दर्ज करें",
+        pleaseEnterTaskDescription: "कृपया कार्य का विवरण दर्ज करें",
+        invalidDate: "कृपया MM/DD/YYYY प्रारूप में एक वैध तिथि दर्ज करें",
+        unableToDetermineUser: "आपका उपयोगकर्ता आईडी निर्धारित करने में असमर्थ। कृपया लॉग आउट करें और फिर से लॉग इन करें।",
+        failedToGetUserData: "उपयोगकर्ता डेटा प्राप्त करने में विफल। कृपया पुनः प्रयास करें।",
+        failedToAddTask: "कार्य जोड़ने में विफल। कृपया पुनः प्रयास करें।",
+        titleLabel: "शीर्षक *",
+        descriptionLabel: "विवरण *",
+        priorityLabel: "प्राथमिकता:",
+        dueDateLabel: "नियत तिथि (MM/DD/YYYY):",
+        cancel: "रद्द करें",
+        addTask: "कार्य जोड़ें"
+      },
+      sortFilter: {
+        searchPlaceholder: "शीर्षक से खोजें...",
+        sort: "सॉर्ट",
+        sortBy: "सॉर्ट बाय",
+        order: "क्रम",
+        sortField: {
+          status: "स्थिति",
+          priority: "प्राथमिकता"
+        },
+        sortOrder: {
+          asc: "आरोही",
+          desc: "अवरोही"
+        },
+        filter: "फिल्टर",
+        filterStatusTitle: "स्थिति",
+        filterPriorityTitle: "प्राथमिकता",
+        filterStatus: {
+          all: "सभी",
+          toDo: "करना है",
+          inProgress: "प्रगति पर",
+          completed: "पूरा",
+          overdue: "देर"
+        },
+        filterPriority: {
+          all: "सभी",
+          low: "निम्न",
+          medium: "मध्यम",
+          high: "उच्च"
+        }
+      },
+      taskTable: {
+        addNewTask: "नई कार्य जोड़ें",
+        errorFetch: "कार्य लोड करने में विफल। कृपया पुनः प्रयास करें।",
+        statusUpdated: "कार्य को {{status}} के रूप में चिह्नित किया गया",
+        failedStatusUpdate: "कार्य स्थिति अपडेट करने में विफल",
+        taskUpdated: "कार्य सफलतापूर्वक अपडेट हुआ",
+        failedUpdate: "कार्य अपडेट करने में विफल",
+        taskDeleted: "कार्य सफलतापूर्वक हटाया गया",
+        failedDelete: "कार्य हटाने में विफल। आपके पास अनुमति नहीं हो सकती है।",
+        pleaseEnterTitle: "कृपया कार्य का शीर्षक दर्ज करें",
+        taskAdded: "कार्य सफलतापूर्वक जोड़ा गया",
+        failedAdd: "कार्य जोड़ने में विफल",
+        loading: "कार्य लोड हो रहे हैं...",
+        noTasks: "कोई कार्य नहीं मिला",
+        header: {
+          title: "शीर्षक",
+          status: "स्थिति",
+          priority: "प्राथमिकता",
+          done: "समाप्त"
+        },
+        dialog: {
+          detailsTitle: "कार्य विवरण",
+          title: "शीर्षक",
+          description: "विवरण",
+          status: "स्थिति",
+          priority: "प्राथमिकता",
+          dueDate: "नियत तिथि",
+          noDescription: "कोई विवरण नहीं दिया गया",
+          noDueDate: "कोई नियत तिथि नहीं",
+          delete: "कार्य हटाएँ",
+          deleteTitle: "कार्य हटाएँ",
+          deleteMessage: "क्या आप वाकई \"{{title}}\" को हटाना चाहते हैं?",
+          cancel: "रद्द करें",
+          edit: "संपादित करें",
+          close: "बंद करें",
+          editTitle: "कार्य संपादित करें",
+          save: "सहेजें",
+          addTitle: "नई कार्य जोड़ें",
+          addTask: "कार्य जोड़ें",
+          dismiss: "बंद करें"
+        },
+        input: {
+          title: "शीर्षक *",
+          description: "विवरण",
+          priority: "प्राथमिकता",
+          dueDate: "नियत तिथि (MM/DD/YYYY)",
+          select: "चुनें"
+        }
+      },
+      "kanban": {
+        "boardTitle": "कानबन बोर्ड",
+        "tasksOverview": "कार्य अवलोकन",
+        "status": {
+          "toDo": "करना है",
+          "inProgress": "प्रगति में",
+          "completed": "पूरा हुआ"
+        }
+      },
+      "taskCard": {
+        "noDueDate": "कोई नियत तिथि नहीं",
+        "normal": "सामान्य",
+        "unknown": "अज्ञात",
+        "due": "नियत तिथि",
+        "created": "बनाया गया",
+        "moveTo": "स्थानांतरित करें:"
+      },
+      "statusPage": {
+        "noTasks": "इस स्थिति में कोई कार्य नहीं"
+      },
+      "tasksProvider": {
+        "error": "त्रुटि",
+        "failedLoadUser": "उपयोगकर्ता जानकारी लोड करने में विफल",
+        "ok": "ठीक है",
+        "sessionExpired": "सत्र समाप्त हो गया",
+        "loginAgain": "जारी रखने के लिए कृपया फिर से लॉगिन करें",
+        "failedLoadTasks": "कार्य लोड करने में विफल। कृपया पुनः प्रयास करें।",
+        "failedStatusUpdate": "कार्य की स्थिति अपडेट करने में विफल"
+      },
+      user: {
+        "allTasks": "सभी कार्य",
+        "completed": "पूर्ण",
+        "toDo": "करना है",
+        "inProgress": "प्रगति पर",
+        "tasks": "कार्य",
+        "myTasks": "मेरे कार्य",
+        "failedToLoadUser": "उपयोगकर्ता जानकारी लोड करने में विफल",
+        "failedToLoadTasks": "कार्य लोड करने में विफल",
+        "noTasksFound": "कोई कार्य नहीं मिला",
+        "noDate": "कोई तिथि नहीं",
+        "invalidDate": "अमान्य तिथि",
+        "noPriority": "कोई प्राथमिकता नहीं"
+      },
+    },
+    manager: {
+        "noDueDate": "कोई नियत तिथि नहीं",
+        "dropHint": "सदस्य पर ड्रॉप करें ताकि असाइन किया जा सके",
+        "normalPriority": "सामान्य",
+        "teamMembers": "टीम सदस्य",
+        "tasksToAssign": "असाइन करने के लिए कार्य",
+        "noTasksAvailable": "असाइन करने के लिए कोई कार्य उपलब्ध नहीं है",
+        "taskAssigned": "कार्य असाइन किया गया",
+        "taskAssignedMsg": "कार्य \"{{title}}\" को {{memberName}} को असाइन किया गया है",
+        "assignmentFailed": "असाइनमेंट विफल",
+        "assignmentFailedMsg": "कार्य असाइन करने में समस्या हुई। कृपया पुनः प्रयास करें।",
+        "noMemberSelected": "कोई सदस्य चयनित नहीं",
+        "dropTaskHint": "कार्य को सीधे किसी टीम सदस्य कार्ड पर ड्रॉप करें ताकि असाइन किया जा सके।",
+        "defaultTeamMember": "टीम सदस्य",
+        "assignmentSuccess": "कार्य सफलतापूर्वक सौंपा गया",
+    "assignmentSuccessMsg": "{{memberName}} को कार्य सफलतापूर्वक सौंपा गया है।"
+      },
+      notifications: {
+        "title": "सूचनाएँ",
+        "noNotifications": "अभी कोई सूचना नहीं है",
+        "deleteTitle": "सूचना हटाएं",
+        "deleteMessage": "क्या आप वाकई इस सूचना को हटाना चाहते हैं?"
+      },
+      "common": {
+        "cancel": "रद्द करें",
+        "delete": "हटाएं"
+      }
+  },
+};
+
+i18n
+  .use(initReactI18next)
+  .init({
+    resources,
+    fallbackLng: 'en',
+    compatibilityJSON: 'v3',
+    interpolation: {
+      escapeValue: false,
+    },
+    react: {
+      useSuspense: false,
+    },
+  });
+
+export const loadSavedLanguage = async () => {
+  try {
+    const savedLanguage = await AsyncStorage.getItem('@language');
+    if (savedLanguage) {
+      await i18n.changeLanguage(savedLanguage);
+    }
+  } catch (error) {
+    console.error('Error loading language:', error);
+  }
+};
+
+export const saveLanguage = async (language) => {
+  try {
+    await AsyncStorage.setItem('@language', language);
+    await i18n.changeLanguage(language);
+  } catch (error) {
+    console.error('Error saving language:', error);
+  }
+};
+
+export default i18n;

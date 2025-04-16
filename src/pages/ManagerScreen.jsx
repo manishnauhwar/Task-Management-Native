@@ -1,28 +1,44 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, StatusBar, SectionList, Animated, PanResponder } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  StatusBar,
+  ScrollView,
+  Animated,
+  PanResponder,
+  TouchableOpacity,
+} from 'react-native';
+import { Card, Text, Avatar, Chip, useTheme as usePaperTheme } from 'react-native-paper';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../utils/ThemeContext';
 import { useNotification } from '../utils/NotificationContext';
+import { useTranslation } from 'react-i18next';
+import axiosInstance from '../utils/axiosinstance';
+import { getCurrentUser } from '../utils/authService';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 
-const TASKS_API = "https://67dd0778e00db03c4069dbf8.mockapi.io/tasks";
-const TEAMS_API = "https://67dd2525e00db03c406a5c23.mockapi.io/teams";
-const LOGGED_IN_MANAGER_ID = "M2";
-
-const DraggableTask = ({ task, memberRanges, assignTaskToMember, sectionListRef }) => {
+const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget }) => {
   const { theme } = useTheme();
+  const paperTheme = usePaperTheme();
+  const { t } = useTranslation();
   const pan = useRef(new Animated.ValueXY()).current;
   const [dragging, setDragging] = useState(false);
-  const taskRef = useRef(null);
-  const memberRangesRef = useRef(memberRanges);
 
-  useEffect(() => {
-    memberRangesRef.current = memberRanges;
-  }, [memberRanges]);
+  const formatDueDate = (dateString) => {
+    if (!dateString) return t('manager.noDueDate');
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10,
       onPanResponderGrant: () => {
         setDragging(true);
+        onDragStart();
         pan.setOffset({ x: pan.x._value, y: pan.y._value });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -32,470 +48,390 @@ const DraggableTask = ({ task, memberRanges, assignTaskToMember, sectionListRef 
       ),
       onPanResponderRelease: (_, gestureState) => {
         setDragging(false);
-
-        let scrollPosition = 0;
-        try {
-          const scrollResponder = sectionListRef.current?.getScrollResponder();
-          if (scrollResponder) {
-            const scrollableNode = scrollResponder.getScrollableNode();
-            if (scrollableNode) {
-              scrollPosition = scrollableNode.scrollTop || 0;
-            }
-          }
-        } catch (error) {
-          console.log('Error getting scroll position:', error);
-        }
-
-       
-        taskRef.current.measure((x, y, width, height, pageX, pageY) => {
-       
-          const dropY = gestureState.moveY + scrollPosition;
-          
-
-         
-          let assignedMember = null;
-          const currentRanges = memberRangesRef.current;
-
-          if (Object.keys(currentRanges).length > 0) {
-            Object.entries(currentRanges).forEach(([memberId, range]) => {
-             
-
-              if (dropY >= range.start && dropY <= range.end) {
-                assignedMember = memberId;
-               
-              }
-            });
-          } 
-
-          if (assignedMember) {
-            assignTaskToMember(task.id, assignedMember);
-          }
-        });
-
-        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
-      }
+        const dropResult = calculateDropTarget(gestureState);
+        onDragEnd(task._id, dropResult);
+        Animated.spring(pan, {
+          toValue: { x: 0, y: 0 },
+          useNativeDriver: false,
+          friction: 5,
+        }).start();
+      },
     })
   ).current;
 
+  const getPriorityColor = (priority) => {
+    if (priority === 'High') return paperTheme.colors.error;
+    if (priority === 'Medium') return paperTheme.colors.warning || '#FF9800';
+    if (priority === 'Low') return paperTheme.colors.success || '#4CAF50';
+    return paperTheme.colors.primary;
+  };
+
   return (
-    <View style={styles.taskWrapper}>
-      <Animated.View
-        ref={taskRef}
-        style={[
-          styles.taskCard,
-          getPriorityStyle(task.priority),
-          dragging && styles.draggedTask,
-          pan.getLayout(),
-          { width: '100%' }
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <Text style={[styles.taskTitle, { color: theme.buttonText, width: '100%' }]}>{task.title}</Text>
-      </Animated.View>
+    <Animated.View
+      style={[styles.taskWrapper, dragging && styles.draggedTask, pan.getLayout()]}
+      {...panResponder.panHandlers}
+    >
+      <Card style={styles.taskCard} elevation={dragging ? 8 : 2}>
+        <Card.Content style={styles.taskCardContent}>
+          <View style={styles.taskHeader}>
+            <Text variant="titleMedium" style={styles.taskTitle}>
+              {task.title}
+            </Text>
+            <Chip
+              mode="outlined"
+              style={[styles.priorityChip, { borderColor: getPriorityColor(task.priority) }]}
+              textStyle={{ color: getPriorityColor(task.priority) }}
+            >
+              {task.priority || t('manager.normalPriority')}
+            </Chip>
+          </View>
+          <View style={styles.taskFooter}>
+            <View style={styles.dateContainer}>
+              <Icon name="calendar-clock" size={16} color={paperTheme.colors.outline} style={{ marginRight: 4 }} />
+              <Text variant="bodySmall">{formatDueDate(task.dueDate)}</Text>
+            </View>
+            {dragging && (
+              <Text variant="bodySmall" style={styles.dragHintText}>
+                {t('manager.dropHint')}
+              </Text>
+            )}
+          </View>
+        </Card.Content>
+      </Card>
+    </Animated.View>
+  );
+};
+
+const TeamMember = ({ member, onLayout, isActive }) => {
+  const paperTheme = usePaperTheme();
+  const { t } = useTranslation();
+
+  const getInitials = (name) => {
+    if (!name) return t('manager.defaultTeamMember');
+    return name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2);
+  };
+
+  const getAvatarColor = (id) => {
+    const colors = [
+      '#FFCDD2', '#F8BBD0', '#E1BEE7', '#D1C4E9', '#C5CAE9',
+      '#BBDEFB', '#B3E5FC', '#B2EBF2', '#B2DFDB', '#C8E6C9',
+      '#DCEDC8', '#F0F4C3', '#FFF9C4', '#FFECB3', '#FFE0B2',
+    ];
+    const hash = String(id).split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const memberId = member._id || member.id;
+  const memberName = member.fullname || member.name || t('manager.defaultTeamMember');
+  const initials = getInitials(memberName);
+  const avatarColor = getAvatarColor(memberId);
+
+  return (
+    <View style={[styles.memberCardContainer, isActive && styles.activeMemberCard]} onLayout={onLayout}>
+      <Card style={styles.memberCard} elevation={isActive ? 4 : 2}>
+        <Card.Content style={styles.memberCardContent}>
+          <Avatar.Text
+            size={60}
+            label={initials}
+            style={[styles.memberAvatar, { backgroundColor: avatarColor }]}
+            labelStyle={{ color: '#333' }}
+          />
+          <Text variant="titleMedium" style={styles.memberName} numberOfLines={1}>
+            {memberName}
+          </Text>
+          <Text variant="bodySmall" style={styles.memberEmail} numberOfLines={1}>
+            {member.email}
+          </Text>
+        </Card.Content>
+      </Card>
     </View>
   );
 };
 
 const ManagerScreen = () => {
   const { theme } = useTheme();
+  const paperTheme = usePaperTheme();
+  const { t } = useTranslation();
+
   const [tasks, setTasks] = useState([]);
   const [team, setTeam] = useState(null);
-  const [memberRanges, setMemberRanges] = useState({});
-  const teamMemberLayoutsRef = useRef({});
-  const sectionListRef = useRef(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [highlightedMember, setHighlightedMember] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
   const memberRefs = useRef({});
-  const managerInfoHeightRef = useRef(0);
-  const tasksSectionHeightRef = useRef(0);
+  const memberPositions = useRef({});
+  const horizontalScrollRef = useRef(null);
+  const mainScrollRef = useRef(null);
   const { addNotification } = useNotification();
 
-  useEffect(() => {
-    fetchTasks();
-    fetchTeams();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchData = async () => {
+        try {
+          const user = await getCurrentUser();
+          setCurrentUser(user);
 
- 
-  useEffect(() => {
-    if (team) {
-      setTimeout(updateMemberRanges, 100);
-    }
-  }, [team]);
+          if (!user) return;
 
-  const calculateMemberRanges = (layouts) => {
-    const ranges = {};
-    const PADDING = 20;
-
-  
-    const sortedMembers = Object.entries(layouts).sort((a, b) => {
-      return a[1].pageY - b[1].pageY;
-    });
-
-    sortedMembers.forEach(([memberId, layout]) => {
-      
-      const absoluteY = layout.pageY;
-      ranges[memberId] = {
-        start: absoluteY - PADDING,
-        end: absoluteY + layout.height + PADDING,
-        pageY: absoluteY,
-        height: layout.height,
-        center: absoluteY + (layout.height / 2)
+          const userId = getUserId(user);
+          if (userId) {
+            await fetchTasks(userId);
+            await fetchTeams(userId);
+          }
+        } catch (error) {
+          console.error('Error fetching current user:', error);
+        }
       };
-    });
 
-    return ranges;
+      fetchData();
+    }, [])
+  );
+
+  const getUserId = (user) => {
+    return (user && (user._id || user.id)) ? (user._id || user.id).toString() : null;
   };
 
-  const updateMemberRanges = () => {
+  const fetchTasks = async (userId) => {
+    try {
+      const response = await axiosInstance.get('/tasks');
+      const data = response.data;
+      const filteredTasks = data.filter(task => task.assignedTo === userId);
+      setTasks(filteredTasks);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  };
 
-    Object.entries(memberRefs.current).forEach(([memberId, ref]) => {
+  const fetchTeams = async (userId) => {
+    try {
+      const response = await axiosInstance.get('/teams');
+      const data = response.data;
+      const managerTeams = data.filter(
+        (t) => t.manager && t.manager._id && t.manager._id.toString() === userId
+      );
+      let aggregatedMembers = [];
+      managerTeams.forEach((team) => {
+        if (team.members && team.members.length > 0) {
+          aggregatedMembers = aggregatedMembers.concat(team.members);
+        }
+      });
+      const uniqueMembers = aggregatedMembers.reduce((acc, member) => {
+        if (!acc.some(m => m._id.toString() === member._id.toString())) {
+          acc.push(member);
+        }
+        return acc;
+      }, []);
+      setTeam({ members: uniqueMembers });
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    }
+  };
+
+  const updateMemberPosition = (memberId) => (event) => {
+    const { x, y, width, height } = event.nativeEvent.layout;
+    memberRefs.current[memberId]?.measureInWindow((pageX, pageY) => {
+      memberPositions.current[memberId] = { pageX, pageY, width, height };
+    });
+  };
+
+  const handleDragStart = () => {
+    setIsDragging(true);
+    setScrollEnabled(false);
+    Object.keys(memberRefs.current).forEach(memberId => {
+      const ref = memberRefs.current[memberId];
       if (ref) {
-        ref.measure((x, y, width, height, pageX, pageY) => {
-         
-
-          teamMemberLayoutsRef.current = {
-            ...teamMemberLayoutsRef.current,
-            [memberId]: {
-              width,
-              height,
-              pageX,
-              pageY,
-              absoluteY: pageY
-            }
-          };
-
-          
-          const ranges = calculateMemberRanges(teamMemberLayoutsRef.current);
-          setMemberRanges(ranges);
-      
+        ref.measureInWindow((pageX, pageY, width, height) => {
+          memberPositions.current[memberId] = { pageX, pageY, width, height };
         });
       }
     });
   };
 
-  const fetchTasks = async () => {
-    try {
-      const response = await fetch(TASKS_API);
-      const data = await response.json();
-      const filteredTasks = data.filter(task => task.assignedTo === LOGGED_IN_MANAGER_ID);
-      setTasks(filteredTasks);
-      setTimeout(updateMemberRanges, 100);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const fetchTeams = async () => {
-    try {
-      const response = await fetch(TEAMS_API);
-      const data = await response.json();
-      const managerTeam = data.find(t => t.manager.id === LOGGED_IN_MANAGER_ID);
-      setTeam(managerTeam);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const assignTaskToMember = async (taskId, memberId) => {
-    try {
-      
-      const response = await fetch(`${TASKS_API}/${taskId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignedTo: memberId }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to assign task');
+  const calculateDropTarget = (gestureState) => {
+    const { moveX, moveY } = gestureState;
+    let targetMemberId = null;
+    let targetMember = null;
+    Object.entries(memberPositions.current).forEach(([memberId, position]) => {
+      const { pageX, pageY, width, height } = position;
+      if (
+        moveX >= pageX &&
+        moveX <= pageX + width &&
+        moveY >= pageY &&
+        moveY <= pageY + height
+      ) {
+        targetMemberId = memberId;
+        targetMember = team.members.find(m =>
+          (m._id || m.id).toString() === memberId
+        );
       }
+    });
+    if (targetMemberId) {
+      setHighlightedMember(targetMemberId);
+      setTimeout(() => setHighlightedMember(null), 500);
+    }
+    return { targetMemberId, targetMember };
+  };
 
-      const updatedTask = await response.json();
+  const handleDragEnd = async (taskId, dropResult) => {
+    setIsDragging(false);
+    setScrollEnabled(true);
+    const { targetMemberId, targetMember } = dropResult;
+    if (targetMemberId) {
+      try {
+        const response = await axiosInstance.put(`/tasks/${taskId}`, {
+          assignedTo: targetMemberId,
+        });
+        if (response.status === 200) {
+          const updatedTask = response.data;
+          const notificationPayload = {
+            type: 'task_assigned',
+            title: t('manager.taskAssigned'),
+            message: t('manager.taskAssignedMsg', {
+              title: updatedTask.title,
+              memberName: targetMember ? (targetMember.fullname || targetMember.name) : t('manager.defaultTeamMember'),
+            }),
+            recipient: targetMemberId,
+            sender: getUserId(currentUser),
+            timestamp: new Date().toISOString(),
+          };
 
-     
-      const assignedMember = team.members.find(member => member.id === memberId);
+          await axiosInstance.post('/notifications', notificationPayload);
 
-      
+          await fetchTasks(getUserId(currentUser));
+        } else {
+          throw new Error('Failed to assign task');
+        }
+      } catch (error) {
+        console.error('Error assigning task:', error);
+
+        addNotification({
+          title: t('manager.assignmentFailed'),
+          message: t('manager.assignmentFailedMsg'),
+          type: 'task_assigned',
+        });
+      }
+    } else {
       addNotification({
-        title: 'Task Assigned to Team Member',
-        message: `Task "${updatedTask.title}" has been assigned to ${assignedMember.name}`,
+        title: t('manager.noMemberSelected'),
+        message: t('manager.dropTaskHint'),
+        type: 'task_assigned',
       });
-
-    
-      await fetchTasks();
-      setTimeout(updateMemberRanges, 100);
-    } catch (error) {
-      console.error('Error assigning task:', error);
     }
   };
 
-  const renderTaskItem = ({ item }) => {
-  
-    return (
-      <DraggableTask
-        task={item}
-        memberRanges={memberRanges}
-        assignTaskToMember={assignTaskToMember}
-        sectionListRef={sectionListRef}
-      />
-    );
-  };
-
-  const renderTeamMember = ({ item }) => (
-    <View
-      key={item.id}
-      ref={ref => memberRefs.current[item.id] = ref}
-      style={[styles.memberCard, {
-        backgroundColor: theme.cardBackground,
-        shadowColor: theme.shadowColor,
-      }]}
-      onLayout={(event) => {
-        const { layout } = event.nativeEvent;
-       
-
-     
-        teamMemberLayoutsRef.current = {
-          ...teamMemberLayoutsRef.current,
-          [item.id]: {
-            width: layout.width,
-            height: layout.height,
-            pageX: layout.x,
-            pageY: layout.y
-          }
-        };
-
-      
-        const ranges = calculateMemberRanges(teamMemberLayoutsRef.current);
-        setMemberRanges(ranges);
-        
-      }}
-    >
-      <Text style={[styles.memberName, { color: theme.text }]}>{item.name}</Text>
-      <Text style={[styles.memberId, { color: theme.textSecondary }]}>ID: {item.id}</Text>
-    </View>
-  );
-
-  const sections = [
-    { title: "Tasks to be Assigned", data: tasks },
-    { title: team ? team.name : "Team Members", data: team ? team.members : [] }
-  ];
-
-  const renderSectionHeader = ({ section: { title } }) => (
-    <View
-      onLayout={(event) => {
-        if (title === "Tasks to be Assigned") {
-          const { height } = event.nativeEvent.layout;
-          tasksSectionHeightRef.current = height;
-         
+  const handleHorizontalScrollEnd = () => {
+    setTimeout(() => {
+      Object.keys(memberRefs.current).forEach(memberId => {
+        const ref = memberRefs.current[memberId];
+        if (ref) {
+          ref.measureInWindow((pageX, pageY, width, height) => {
+            memberPositions.current[memberId] = { pageX, pageY, width, height };
+          });
         }
-      }}
-    >
-      <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>
-    </View>
-  );
+      });
+    }, 50);
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-    <StatusBar
-      backgroundColor={theme.background}
-      barStyle={theme.text === '#ffffff' ? "light-content" : "dark-content"}
-    />
-      <Text style={[styles.heading, { color: theme.text }]}>Manager Board</Text>
-      <View style={styles.mainContainer}>
-        {team && (
-          <View style={[styles.managerInfo, {
-            backgroundColor: theme.cardBackground,
-            borderLeftWidth: 4,
-            borderLeftColor: theme.primary,
-          }]}>
-            <Text style={[styles.managerName, { color: theme.text }]}>
-              {team.manager.name}
-            </Text>
-            <Text style={[styles.managerEmail, { color: theme.textSecondary }]}>
-              {team.manager.email}
-            </Text>
-          </View>
-        )}
-        <View style={styles.tasksContainer}>
-          <SectionList
-            ref={sectionListRef}
-            sections={[{ title: "Tasks to be Assigned", data: tasks }]}
-            keyExtractor={(item, index) => item.id ? item.id : index.toString()}
-            renderItem={renderTaskItem}
-            renderSectionHeader={renderSectionHeader}
-            contentContainerStyle={styles.sectionListContent}
-           
-          />
-        </View>
+      <StatusBar
+        backgroundColor={theme.background}
+        barStyle={theme.text === '#ffffff' ? 'light-content' : 'dark-content'}
+      />
+      <ScrollView
+        ref={mainScrollRef}
+        contentContainerStyle={styles.container}
+        scrollEnabled={scrollEnabled}
+      >
         <View style={styles.membersContainer}>
-          <SectionList
-            sections={[{ title: team ? team.name : "Team Members", data: team ? team.members : [] }]}
-            keyExtractor={(item, index) => item.id ? item.id : index.toString()}
-            renderItem={renderTeamMember}
-            renderSectionHeader={renderSectionHeader}
-            contentContainerStyle={styles.sectionListContent}
-          />
+          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.text }]}>
+            {t('manager.teamMembers')}
+          </Text>
+          <ScrollView
+            ref={horizontalScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            scrollEnabled={scrollEnabled}
+            onMomentumScrollEnd={handleHorizontalScrollEnd}
+            onScrollEndDrag={handleHorizontalScrollEnd}
+          >
+            {team?.members?.map(member => {
+              const memberId = (member._id || member.id).toString();
+              return (
+                <View key={memberId} ref={ref => (memberRefs.current[memberId] = ref)}>
+                  <TeamMember
+                    member={member}
+                    onLayout={updateMemberPosition(memberId)}
+                    isActive={highlightedMember === memberId}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
-      </View>
+        <View style={styles.tasksContainer}>
+          <Text variant="titleLarge" style={[styles.sectionTitle, { color: theme.text }]}>
+            {t('manager.tasksToAssign')}
+          </Text>
+          <View style={styles.tasksGrid}>
+            {tasks.length === 0 ? (
+              <Card style={styles.emptyStateCard}>
+                <Card.Content style={styles.emptyStateContent}>
+                  <Icon name="clipboard-text-outline" size={50} color={paperTheme.colors.outline} />
+                  <Text variant="bodyLarge" style={{ textAlign: 'center', marginTop: 10 }}>
+                    {t('manager.noTasksAvailable')}
+                  </Text>
+                </Card.Content>
+              </Card>
+            ) : (
+              tasks.map(task => (
+                <DraggableTask
+                  key={task._id || task.id}
+                  task={task}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  calculateDropTarget={calculateDropTarget}
+                />
+              ))
+            )}
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getPriorityStyle = (priority) => {
-  const { theme, isDarkMode } = useTheme();
-
-  const priorityColors = {
-    light: {
-      High: "#ff4d4d",
-      Medium: "#ffcc00",
-      Low: "#28a745",
-    },
-    dark: {
-      High: "#8B0000", 
-      Medium: "#B8860B", 
-      Low: "#006400",
-  },
-  }
-  const colors = isDarkMode ? priorityColors.dark : priorityColors.light;
-
-  switch (priority) {
-    case "High":
-      return { backgroundColor: colors.High };
-    case "Medium":
-      return { backgroundColor: colors.Medium };
-    case "Low":
-      return { backgroundColor: colors.Low };
-    default:
-      return { backgroundColor: theme.cardBackground };
-  }
-};
-
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 ,
-    marginTop: 10,
-  },
-  heading: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginVertical: 15,
-    textAlign: 'center'
-  },
-  sectionListContent: { 
-    padding: 10,
-    marginHorizontal: 10,
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  managerInfo: {
-    marginHorizontal: 20,
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    position: 'relative',
-    zIndex: 1,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  managerName: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  managerEmail: {
-    fontSize: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginVertical: 10,
-  },
-  taskWrapper: {
-    position: 'relative',
-    width: '100%',
-  },
-  taskCard: {
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 8,
-    elevation: 3,
-    backgroundColor: "black",
-    position: 'relative',
-    zIndex: 1,
-    width: '100%',
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#fff",
-    width: '100%',
-  },
-  memberCard: {
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-    elevation: 3,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-  },
-  memberName: {
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  memberId: {
-    fontSize: 14,
-  },
-  tasksContainer: {
-    height: '30%',
-    maxHeight: '30%',
-    backgroundColor: 'transparent',
-    position: 'relative',
-    zIndex: 1,
-    width: '100%',
-    marginBottom: 20,
-  },
-  membersContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    position: 'relative',
-    zIndex: 1,
-    width: '100%',
-  },
-  mainContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    width: '100%',
-    position: 'relative',
-  },
-  draggedTask: {
-    position: 'absolute',
-    zIndex: 9999,
-    elevation: 9999,
-    width: '100%',
-    backgroundColor: 'black',
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    top: 0,
-    left: 0,
-  }
+  safeArea: { flex: 1 },
+  container: { padding: 10 },
+  membersContainer: { marginBottom: 20 },
+  sectionTitle: { marginBottom: 10 },
+  tasksContainer: { marginBottom: 20 },
+  tasksGrid: { flex: 1 },
+  emptyStateCard: { marginVertical: 20, padding: 20 },
+  emptyStateContent: { alignItems: 'center', justifyContent: 'center' },
+  taskWrapper: {},
+  draggedTask: { opacity: 0.8 },
+  taskCard: { marginBottom: 16, borderRadius: 12, overflow: 'hidden' },
+  taskCardContent: { padding: 10 },
+  taskHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  taskTitle: { fontSize: 16, fontWeight: '700' },
+  priorityChip: { height: 28, borderRadius: 14, paddingHorizontal: 10 },
+  taskFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 10, justifyContent: 'space-between' },
+  dateContainer: { flexDirection: 'row', alignItems: 'center' },
+  dragHintText: { fontSize: 12, fontStyle: 'italic', color: '#888' },
+  memberCardContainer: { marginRight: 10 },
+  activeMemberCard: { borderWidth: 2, borderColor: '#81b0ff' },
+  memberCard: { width: 120, alignItems: 'center' },
+  memberCardContent: { alignItems: 'center' },
+  memberAvatar: { marginBottom: 8 },
+  memberName: { fontSize: 14, fontWeight: '700' },
+  memberEmail: { fontSize: 12, color: '#555' },
 });
 
 export default ManagerScreen;
-
-

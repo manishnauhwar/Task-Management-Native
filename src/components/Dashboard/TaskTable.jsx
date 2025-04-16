@@ -1,572 +1,819 @@
-import {
-  StyleSheet,
-  Text,
-  View,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal
-} from 'react-native';
-import React, { useEffect, useState } from 'react';
-import DropDownPicker from 'react-native-dropdown-picker';
-import axios from 'axios';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useTheme } from '../../utils/ThemeContext';
+import { View,TouchableOpacity, RefreshControl, FlatList,StyleSheet} from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import {Text, Button,Portal,Dialog,TextInput,Switch,Surface,List,Divider,Snackbar,Chip,IconButton,TouchableRipple,Menu} from 'react-native-paper';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import axiosInstance from '../../utils/axiosinstance';
+import { useTheme } from 'react-native-paper';
+import { useTheme as useCustomTheme } from '../../utils/ThemeContext';
+import { getCurrentUser } from '../../utils/authService';
+import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
 
-const API_URL = 'https://67dd0778e00db03c4069dbf8.mockapi.io/tasks';
+const getStatusColor = (status) => {
+  if (!status) return '#9e9e9e';
+  
+  switch (String(status).toLowerCase()) {
+    case 'completed': return '#4caf50';
+    case 'in progress': return '#2196f3';
+    case 'to do': return '#ff9800';
+    case 'overdue': return '#f44336';
+    default: return '#9e9e9e';
+  }
+};
+
+const getPriorityColor = (priority) => {
+  if (!priority) return '#9e9e9e';
+  
+  switch (String(priority).toLowerCase()) {
+    case 'high': return '#f44336';
+    case 'medium': return '#ff9800';
+    case 'low': return '#4caf50';
+    default: return '#9e9e9e';
+  }
+};
+
+const StatusChip = ({ status }) => (
+  <Chip style={{ backgroundColor: getStatusColor(status) + '20', marginVertical: 2 }} textStyle={{ color: getStatusColor(status), fontSize: 12 }}>
+    {status}
+  </Chip>
+);
+
+const PriorityChip = ({ priority }) => (
+  <Chip style={{ backgroundColor: getPriorityColor(priority) + '20', marginVertical: 2 }} textStyle={{ color: getPriorityColor(priority), fontSize: 12 }}>
+    {priority}
+  </Chip>
+);
 
 const TaskTable = ({
   sortField = '',
   sortOrder = 'asc',
   filterStatus = 'All',
-  filterPriority = 'All'
+  filterPriority = 'All',
+  searchQuery = ''
 }) => {
-  const { theme } = useTheme();
+  const paperTheme = useTheme();
+  const { theme: customTheme } = useCustomTheme();
+  const { t } = useTranslation();
+  const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const [filteredTasks, setFilteredTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [addmodal, setAddmodal] = useState(false);
-  const [newtask, setNewtask] = useState({
+  const [isDialogVisible, setIsDialogVisible] = useState(false);
+  const [isEditDialogVisible, setIsEditDialogVisible] = useState(false);
+  const [isDeleteDialogVisible, setIsDeleteDialogVisible] = useState(false);
+  const [isAddDialogVisible, setIsAddDialogVisible] = useState(false);
+  const [error, setError] = useState(null);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [newTask, setNewTask] = useState({
     title: '',
-    priority: 'Low',
-    status: 'Pending',
-    dueDate: new Date().toISOString().split('T')[0]
+    description: '',
+    dueDate: '',
+    priority: 'Medium',
   });
-  const [open, setOpen] = useState(false);
-  const [items, setItems] = useState([
-    { label: 'Low', value: 'Low' },
-    { label: 'Medium', value: 'Medium' },
-    { label: 'High', value: 'High' }
-  ]);
+  const [priorityMenuVisible, setPriorityMenuVisible] = useState(false);
 
   useEffect(() => {
-    fetchTasks();
+    loadUserAndFetchTasks();
   }, []);
 
-  const fetchTasks = async () => {
-    try {
-      const res = await axios.get(API_URL);
-      setTasks(res.data);
-      setLoading(false);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const addTask = async () => {
-    if (!newtask.title.trim()) {
-      alert("Title can't be empty!");
-      return;
-    }
-
-    
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(newtask.dueDate)) {
-      alert("Please enter a valid date in YYYY-MM-DD format!");
-      return;
-    }
-
-    try {
-      const date = new Date(newtask.dueDate);
-      if (isNaN(date.getTime())) {
-        alert("Please enter a valid date!");
-        return;
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAddDialogVisible) {
+        loadUserAndFetchTasks();
       }
+    }, [isAddDialogVisible])
+  );
+  useEffect(() => {
+    filterAndSortTasks();
+  }, [tasks, filterStatus, filterPriority, searchQuery, sortField, sortOrder]);
 
-      const task = { ...newtask, id: Date.now().toString() };
-      const res = await axios.post(API_URL, task);
-      setTasks([...tasks, res.data]);
-      setAddmodal(false);
-      setNewtask({ title: '', priority: 'Low', status: 'Pending', dueDate: new Date().toISOString().split('T')[0] });
-    } catch (error) {
-      console.error(error);
-      alert("Failed to add task");
-    }
-  };
-
-  const deleteTask = async (taskId) => {
+  const loadUserAndFetchTasks = async () => {
     try {
-      await axios.delete(`${API_URL}/${taskId}`);
-      setTasks(tasks.filter(task => task.id !== taskId));
+      const currentUser = await getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        await fetchTasks(currentUser);
+      } else {
+        setLoading(false);
+      }
     } catch (error) {
-      console.error(error);
+      console.error('Error loading user data:', error);
+      setLoading(false);
     }
   };
 
-  const openUpdateModal = (task) => {
+  const fetchTasks = async (currentUser) => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get('/tasks');
+      if (response.data && Array.isArray(response.data)) {
+        const processedTasks = response.data.map(task => {
+          const taskDate = new Date(task.dueDate);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (task.status !== 'Completed' && taskDate < today) {
+            return { ...task, status: 'overdue' };
+          }
+          return task;
+        });
+        
+        let userTasks = processedTasks;
+        
+        // Filter tasks based on user role
+        if (currentUser.role === 'admin') {
+          // Admin sees all tasks
+        } else if (currentUser.role === 'manager') {
+          try {
+            const teamsResponse = await axiosInstance.get('/teams');
+            const managedTeams = teamsResponse.data.filter(
+              team => team.manager && team.manager._id === currentUser.id
+            );
+            const teamMemberIds = [];
+            managedTeams.forEach(team => {
+              if (team.members && team.members.length > 0) {
+                team.members.forEach(member => {
+                  teamMemberIds.push(member._id);
+                });
+              }
+            });
+            setTeamMembers(teamMemberIds);
+            userTasks = processedTasks.filter(task =>
+              task.userId === currentUser.id ||
+              teamMemberIds.includes(task.userId) ||
+              task.assignedTo === currentUser.id ||
+              teamMemberIds.includes(task.assignedTo)
+            );
+          } catch (error) {
+            userTasks = processedTasks.filter(
+              task => task.userId === currentUser.id || task.assignedTo === currentUser.id
+            );
+          }
+        } else {
+          userTasks = processedTasks.filter(
+            task => task.userId === currentUser.id || task.assignedTo === currentUser.id
+          );
+        }
+        
+        setTasks(userTasks.reverse());
+      } else {
+        setTasks([]);
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      setError(t('taskTable.errorFetch'));
+      setSnackbarVisible(true);
+      setTasks([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const formatDateForBackend = (dateString) => {
+    if (!dateString) return '';
+    
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
+    
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+      const [month, day, year] = dateString.split('/');
+      return `${year}-${month}-${day}`;
+    }
+    
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const filterAndSortTasks = () => {
+    const filtered = tasks.filter(task => {
+      const searchMatch = !searchQuery || 
+        (task.title && task.title.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const statusMatch = filterStatus === 'All' ||
+        (filterStatus === 'overdue' && task.status === 'overdue') ||
+        (filterStatus !== 'overdue' && task.status && task.status.toLowerCase() === filterStatus.toLowerCase());
+        
+      const priorityMatch = filterPriority === 'All' || 
+        (task.priority && task.priority.toLowerCase() === filterPriority.toLowerCase());
+        
+      return searchMatch && statusMatch && priorityMatch;
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (!sortField) return 0;
+      
+      const valA = a[sortField] ? String(a[sortField]).toLowerCase() : '';
+      const valB = b[sortField] ? String(b[sortField]).toLowerCase() : '';
+      
+      if (sortField === 'priority') {
+        const priorityOrder = { high: 1, medium: 2, low: 3 };
+        const orderA = priorityOrder[valA] || 999;
+        const orderB = priorityOrder[valB] || 999;
+        return sortOrder === 'asc' ? orderA - orderB : orderB - orderA;
+      } else if (sortField === 'status') {
+        const statusOrder = { 'completed': 1, 'in progress': 2, 'to do': 3, 'overdue': 4 };
+        const orderA = statusOrder[valA] || 999;
+        const orderB = statusOrder[valB] || 999;
+        return sortOrder === 'asc' ? orderA - orderB : orderB - orderA;
+      }
+      
+      return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    });
+
+    setFilteredTasks(sorted);
+  };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadUserAndFetchTasks();
+  }, []);
+
+  const handleTaskPress = (task) => {
     setSelectedTask(task);
-    setModalVisible(true);
+    setIsDialogVisible(true);
+  };
+
+  const toggleTaskStatus = async (task) => {
+    try {
+      const newStatus = task.status === 'Completed' ? 'To Do' : 'Completed';
+      const response = await axiosInstance.put(`/tasks/${task._id}`, { ...task, status: newStatus });
+      if (response.data) {
+        setTasks(tasks.map(t => t._id === task._id ? { ...t, status: newStatus } : t));
+        if (selectedTask && selectedTask._id === task._id) {
+          setSelectedTask({ ...selectedTask, status: newStatus });
+        }
+        setError(t('taskTable.statusUpdated', { status: newStatus }));
+        setSnackbarVisible(true);
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      setError(error.response?.data?.message || t('taskTable.failedStatusUpdate'));
+      setSnackbarVisible(true);
+    }
   };
 
   const updateTask = async () => {
     try {
-      await axios.put(`${API_URL}/${selectedTask.id}`, selectedTask);
-      setTasks(tasks.map(t => (t.id === selectedTask.id ? selectedTask : t)));
-      setModalVisible(false);
+      if (!selectedTask) return;
+      const response = await axiosInstance.put(`/tasks/${selectedTask._id}`, {
+        title: selectedTask.title,
+        status: selectedTask.status,
+        priority: selectedTask.priority,
+        dueDate: selectedTask.dueDate,
+        description: selectedTask.description,
+      });
+      if (response.data) {
+        setTasks(tasks.map(task => task._id === selectedTask._id ? response.data : task));
+        setIsEditDialogVisible(false);
+        setError(t('taskTable.taskUpdated'));
+        setSnackbarVisible(true);
+      }
     } catch (error) {
-      console.error(error);
+      console.error('Error updating task:', error);
+      setError(error.response?.data?.message || t('taskTable.failedUpdate'));
+      setSnackbarVisible(true);
     }
   };
 
-  const safeLower = (value) => (value ? value.toString().toLowerCase() : '');
-  const getStatusLower = (task) => safeLower(task.status);
-  const getPriorityLower = (task) => safeLower(task.priority);
-  const normFilterStatus = safeLower(filterStatus);
-  const normFilterPriority = safeLower(filterPriority);
-
-  const filteredTasks = tasks.filter(task => {
-    const statusMatch =
-      normFilterStatus === 'all' || getStatusLower(task) === normFilterStatus;
-    const priorityMatch =
-      normFilterPriority === 'all' || getPriorityLower(task) === normFilterPriority;
-    return statusMatch && priorityMatch;
-  });
-
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    if (!sortField) return 0;
-    const valA = safeLower(a[sortField]);
-    const valB = safeLower(b[sortField]);
-
-    if (sortField === 'priority') {
-      if (sortOrder === 'asc') {
-        const orderAsc = { high: 1, medium: 2, low: 3 };
-        return (orderAsc[valA] || 999) - (orderAsc[valB] || 999);
-      } else {
-        const orderDesc = { low: 1, medium: 2, high: 3 };
-        return (orderDesc[valA] || 999) - (orderDesc[valB] || 999);
-      }
-    } else if (sortField === 'status') {
-      if (sortOrder === 'asc') {
-        const orderAsc = { completed: 1, 'in progress': 2, pending: 3, overdue: 4 };
-        return (orderAsc[valA] || 999) - (orderAsc[valB] || 999);
-      } else {
-        const orderDesc = { overdue: 1, pending: 2, 'in progress': 3, completed: 4 };
-        return (orderDesc[valA] || 999) - (orderDesc[valB] || 999);
-      }
-    } else {
-      return sortOrder === 'asc'
-        ? valA.localeCompare(valB)
-        : valB.localeCompare(valA);
+  const deleteTask = async () => {
+    try {
+      if (!selectedTask) return;
+      await axiosInstance.delete(`/tasks/${selectedTask._id}`);
+      setTasks(tasks.filter(task => task._id !== selectedTask._id));
+      setIsDeleteDialogVisible(false);
+      setError(t('taskTable.taskDeleted'));
+      setSnackbarVisible(true);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setError(error.response?.data?.message || t('taskTable.failedDelete'));
+      setSnackbarVisible(true);
     }
-  });
+  };
+
+  const submitNewTask = async () => {
+    if (!user) {
+      setError(t('taskTable.pleaseLogin'));
+      setSnackbarVisible(true);
+      return;
+    }
+    
+    if (!newTask.title.trim()) {
+      setError(t('taskTable.pleaseEnterTitle'));
+      setSnackbarVisible(true);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const taskToSubmit = {
+        title: newTask.title,
+        description: newTask.description || '',
+        dueDate: formatDateForBackend(newTask.dueDate),
+        priority: newTask.priority || 'Medium',
+        status: 'To Do',
+        assignedTo: user.id,
+        userId: user.id,
+      };
+      
+      const response = await axiosInstance.post('/tasks/post', taskToSubmit);
+      
+      if (response.data) {
+        setTasks([response.data, ...tasks]);
+        setNewTask({ title: '', description: '', dueDate: '', priority: 'Medium' });
+        setIsAddDialogVisible(false);
+        setError(t('taskTable.taskAdded'));
+        setSnackbarVisible(true);
+      }
+    } catch (error) {
+      console.error('Error adding task:', error);
+      setError(error.response?.data?.message || t('taskTable.failedAdd'));
+      setSnackbarVisible(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canEditTask = (task) => {
+    if (!user) return false;
+    return task.userId === user.id ||
+      task.assignedTo === user.id ||
+      ['admin', 'manager'].includes(user.role);
+  };
+
+  const canDeleteTask = (task) => {
+    if (!user) return false;
+    return ['admin', 'manager'].includes(user.role);
+  };
+
+  const formatDateForDisplay = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+  };
+
+  const handleDueDateChange = (text) => {
+    if (text.length === 2 && !text.includes('/')) {
+      text = `${text}/`;
+    } else if (text.length === 5 && text.charAt(2) === '/' && !text.includes('/', 3)) {
+      text = `${text}/`;
+    }
+    setNewTask({ ...newTask, dueDate: text });
+  };
+  
+  const renderItem = ({ item }) => (
+    <TouchableRipple onPress={() => handleTaskPress(item)}>
+      <View style={{ flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+        <View style={{ flex: 3 }}>
+          <Text numberOfLines={2} style={{ fontWeight: '500' }}>{item.title}</Text>
+        </View>
+        <View style={{ flex: 2, alignItems: 'center' }}>
+          <StatusChip status={item.status} />
+        </View>
+        <View style={{ flex: 2, alignItems: 'center' }}>
+          <PriorityChip priority={item.priority} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <IconButton
+            icon={item.status === 'Completed' ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+            iconColor={item.status === 'Completed' ? '#4caf50' : '#9e9e9e'}
+            size={24}
+            onPress={(e) => {
+              e.stopPropagation();
+              toggleTaskStatus(item);
+            }}
+          />
+        </View>
+      </View>
+    </TouchableRipple>
+  );
 
   return (
-    <View style={[styles.outerContainer, { backgroundColor: theme.background }]}>
-      <View style={styles.addContainer}>
-        <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: theme.primary }]}
-          onPress={() => setAddmodal(true)}
-        >
-          <Text style={[styles.addButtonText, { color: theme.buttonText }]}>
-            + Add Task
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <View style={[styles.tableContainer, { backgroundColor: theme.cardBackground }]}>
-        <View style={styles.tableContent}>
-          <View style={styles.tableHeaderRow}>
-            <Text style={[styles.tableHeader, { color: theme.cardHeaderText }]}>Title</Text>
-            <Text style={[styles.tableHeader, { color: theme.cardHeaderText }]}>Status</Text>
-            <Text style={[styles.tableHeader, { color: theme.cardHeaderText }]}>Priority</Text>
-            <Text style={[styles.tableHeader, { color: theme.cardHeaderText }]}>Due Date</Text>
-            <Text style={[styles.tableHeader, { color: theme.cardHeaderText }]}>Action</Text>
-          </View>
-          <ScrollView
-            style={styles.tableBody}
-            contentContainerStyle={styles.tableBodyContent}
-            nestedScrollEnabled={true}
-          >
-            {loading ? (
-              <Text style={[styles.loadingText, { color: theme.text }]}>Loading...</Text>
-            ) : (
-              sortedTasks.map((task, index) => (
-                <View
-                  key={task.id}
-                  style={[
-                    styles.tableRow,
-                    index % 2 === 0 ? styles.evenRow : styles.oddRow
-                  ]}
-                >
-                  <Text style={[styles.tableCell, { color: theme.text }]}>
-                    {task.title}
-                  </Text>
-                  <Text style={[styles.tableCell, { color: theme.text }]}>
-                    {task.status}
-                  </Text>
-                  <Text style={[styles.tableCell, { color: theme.text }]}>
-                    {task.priority}
-                  </Text>
-                  <Text style={[styles.tableCell, { color: theme.text }]}>
-                    {task.dueDate}
-                  </Text>
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      onPress={() => openUpdateModal(task)}
-                      style={styles.iconButton}
-                    >
-                      <Ionicons name="pencil" size={20} color="#28a745" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => deleteTask(task.id)}
-                      style={styles.iconButton}
-                    >
-                      <Ionicons name="trash" size={20} color="#dc3545" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
+    <Surface style={{ flex: 1, backgroundColor: '#fff' }}>
+      <TouchableOpacity 
+        style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}
+        onPress={() => setIsAddDialogVisible(true)}
+      >
+        <Icon name="plus-circle" size={24} color="#6366f1" />
+        <Text style={{ marginLeft: 8, color: '#6366f1', fontWeight: '500' }}>{t('taskTable.addNewTask')}</Text>
+      </TouchableOpacity>
+
+      {/* Fixed Header */}
+      <View style={{ flexDirection: 'row', backgroundColor: '#f5f5f5', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+        <View style={{ flex: 3 }}>
+          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.title')}</Text>
+        </View>
+        <View style={{ flex: 2, alignItems: 'center' }}>
+          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.status')}</Text>
+        </View>
+        <View style={{ flex: 2, alignItems: 'center' }}>
+          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.priority')}</Text>
+        </View>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.done')}</Text>
         </View>
       </View>
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        presentationStyle="overFullScreen"
-      >
-        <View style={styles.modalWrapper}>
-          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Update Task
-            </Text>
+
+      {loading && filteredTasks.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text>{t('taskTable.loading')}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredTasks}
+          renderItem={renderItem}
+          keyExtractor={(item) => item._id || String(Math.random())}
+          ListEmptyComponent={
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+              <Text>{t('taskTable.noTasks')}</Text>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6366f1']} />
+          }
+          contentContainerStyle={filteredTasks.length === 0 ? { flex: 1 } : null}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+
+      <Portal>
+        <Dialog visible={isDialogVisible} onDismiss={() => setIsDialogVisible(false)} style={{ borderRadius: 8 }}>
+          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.detailsTitle')}</Dialog.Title>
+          <Dialog.Content>
+            <Surface style={{ borderRadius: 8, padding: 8 }}>
+              <List.Section>
+                <List.Item
+                  title={t('taskTable.dialog.title')}
+                  description={selectedTask?.title}
+                  left={props => <List.Icon {...props} icon="format-title" />}
+                />
+                <Divider />
+                <List.Item
+                  title={t('taskTable.dialog.description')}
+                  description={selectedTask?.description || t('taskTable.dialog.noDescription')}
+                  left={props => <List.Icon {...props} icon="text-box-outline" />}
+                />
+                <Divider />
+                <List.Item
+                  title={t('taskTable.dialog.status')}
+                  description={() => (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text>{selectedTask?.status}</Text>
+                      {selectedTask && canEditTask(selectedTask) && (
+                        <Switch
+                          value={selectedTask?.status === 'Completed'}
+                          onValueChange={() => {
+                            toggleTaskStatus(selectedTask);
+                            setIsDialogVisible(false);
+                          }}
+                          color={getStatusColor('Completed')}
+                        />
+                      )}
+                    </View>
+                  )}
+                  left={props => <List.Icon {...props} icon="checkbox-marked-circle-outline" />}
+                />
+                <Divider />
+                <List.Item
+                  title={t('taskTable.dialog.priority')}
+                  description={selectedTask?.priority}
+                  left={props => <List.Icon {...props} icon="priority-high" />}
+                />
+                <Divider />
+                <List.Item
+                  title={t('taskTable.dialog.dueDate')}
+                  description={selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : t('taskTable.dialog.noDueDate')}
+                  left={props => <List.Icon {...props} icon="calendar" />}
+                />
+              </List.Section>
+            </Surface>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 8 }}>
+              {selectedTask && canDeleteTask(selectedTask) && (
+                <Button mode="contained" buttonColor="#f44336" onPress={() => { setIsDialogVisible(false); setIsDeleteDialogVisible(true); }}>
+                  {t('taskTable.dialog.delete')}
+                </Button>
+              )}
+              {selectedTask && canEditTask(selectedTask) && (
+                <Button mode="contained" onPress={() => { setIsDialogVisible(false); setIsEditDialogVisible(true); }}>
+                  {t('taskTable.dialog.edit')}
+                </Button>
+              )}
+              <Button mode="outlined" onPress={() => setIsDialogVisible(false)}>
+                {t('taskTable.dialog.close')}
+              </Button>
+            </View>
+          </Dialog.Actions>
+        </Dialog>
+        <Dialog visible={isEditDialogVisible} onDismiss={() => setIsEditDialogVisible(false)} style={{ borderRadius: 8 }}>
+          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.editTitle')}</Dialog.Title>
+          <Dialog.Content>
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.text
-                }
-              ]}
-              placeholder="Title"
-              placeholderTextColor={theme.placeholder}
+              label={t('taskTable.input.title')}
               value={selectedTask?.title}
               onChangeText={(text) => setSelectedTask({ ...selectedTask, title: text })}
+              style={{ marginBottom: 8 }}
+              mode="outlined"
             />
             <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.text
-                }
-              ]}
-              placeholder="Status"
-              placeholderTextColor={theme.placeholder}
-              value={selectedTask?.status}
-              onChangeText={(text) => setSelectedTask({ ...selectedTask, status: text })}
+              label={t('taskTable.input.description')}
+              value={selectedTask?.description}
+              onChangeText={(text) => setSelectedTask({ ...selectedTask, description: text })}
+              style={{ marginBottom: 8 }}
+              mode="outlined"
+              multiline
             />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.text
-                }
-              ]}
-              placeholder="Priority"
-              placeholderTextColor={theme.placeholder}
-              value={selectedTask?.priority}
-              onChangeText={(text) => setSelectedTask({ ...selectedTask, priority: text })}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.text
-                }
-              ]}
-              placeholder="Due Date (YYYY-MM-DD)"
-              placeholderTextColor={theme.placeholder}
-              value={selectedTask?.dueDate}
-              onChangeText={(text) => setSelectedTask({ ...selectedTask, dueDate: text })}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalButton} onPress={updateTask}>
-                <Text style={styles.modalButtonText}>Update</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-      <Modal
-        visible={addmodal}
-        animationType="slide"
-        transparent
-        presentationStyle="overFullScreen"
-      >
-        <View style={styles.modalWrapper}>
-          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              Add Task
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.text
-                }
-              ]}
-              placeholder="Title"
-              placeholderTextColor={theme.placeholder}
-              value={newtask.title}
-              onChangeText={(text) => setNewtask({ ...newtask, title: text })}
-            />
-            <DropDownPicker
-              listMode="SCROLLVIEW"
-              open={open}
-              value={newtask.priority}
-              items={items}
-              setOpen={setOpen}
-              setValue={(callback) => {
-                const newVal = callback(newtask.priority);
-                setNewtask({ ...newtask, priority: newVal });
-              }}
-              setItems={setItems}
-              style={{
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.border,
-                borderWidth: 1,
-                borderRadius: 10,
-                paddingHorizontal: 10,
-                marginBottom: 15
-              }}
-              dropDownContainerStyle={{
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.border,
-                borderWidth: 1,
-                borderRadius: 10,
-                zIndex: 13
-              }}
-              placeholderStyle={{ color: theme.placeholder }}
-              textStyle={{ color: theme.text }}
-              listItemContainerStyle={{ backgroundColor: theme.inputBackground }}
-              listItemLabelStyle={{ color: theme.text }}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border,
-                  color: theme.text
-                }
-              ]}
-              placeholder="Due Date (YYYY-MM-DD)"
-              placeholderTextColor={theme.placeholder}
-              value={newtask.dueDate}
-              onChangeText={(text) => setNewtask({ ...newtask, dueDate: text })}
-            />
-            <View
-              style={[
-                styles.statictextcontainer,
-                {
-                  backgroundColor: theme.inputBackground,
-                  borderColor: theme.border
-                }
-              ]}
+            <Menu
+              visible={priorityMenuVisible}
+              onDismiss={() => setPriorityMenuVisible(false)}
+              anchor={
+                <Button mode="outlined" onPress={() => setPriorityMenuVisible(true)} style={{ marginVertical: 8 }}>
+                  {t('taskTable.input.priority')}: {selectedTask?.priority || t('taskTable.input.select')}
+                </Button>
+              }
             >
-              <Text style={[styles.staticText, { color: theme.text }]}>
-                Status: Pending
-              </Text>
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalButton} onPress={addTask}>
-                <Text style={styles.modalButtonText}>Add</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.cancelModalButton}
-                onPress={() => setAddmodal(false)}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
+              <Menu.Item
+                onPress={() => {
+                  setSelectedTask({ ...selectedTask, priority: 'Low' });
+                  setPriorityMenuVisible(false);
+                }}
+                title="Low"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSelectedTask({ ...selectedTask, priority: 'Medium' });
+                  setPriorityMenuVisible(false);
+                }}
+                title="Medium"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setSelectedTask({ ...selectedTask, priority: 'High' });
+                  setPriorityMenuVisible(false);
+                }}
+                title="High"
+              />
+            </Menu>
+            <TextInput
+              label={t('taskTable.input.dueDate')}
+              value={selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
+              onChangeText={(text) => setSelectedTask({ ...selectedTask, dueDate: text })}
+              style={{ marginBottom: 8 }}
+              mode="outlined"
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setIsEditDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
+            <Button mode="contained" onPress={updateTask}>{t('taskTable.dialog.save')}</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={isDeleteDialogVisible} onDismiss={() => setIsDeleteDialogVisible(false)} style={{ borderRadius: 8 }}>
+          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.deleteTitle')}</Dialog.Title>
+          <Dialog.Content>
+            <Text>{t('taskTable.dialog.deleteMessage', { title: selectedTask?.title })}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setIsDeleteDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
+            <Button mode="contained" buttonColor="#f44336" onPress={deleteTask}>{t('taskTable.dialog.delete')}</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        <Dialog visible={isAddDialogVisible} onDismiss={() => setIsAddDialogVisible(false)} style={{ borderRadius: 8 }}>
+          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.addTitle')}</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label={t('taskTable.input.title')}
+              value={newTask.title}
+              onChangeText={(text) => setNewTask({ ...newTask, title: text })}
+              style={{ marginBottom: 8 }}
+              mode="outlined"
+              autoCapitalize="sentences"
+            />
+            <TextInput
+              label={t('taskTable.input.description')}
+              value={newTask.description}
+              onChangeText={(text) => setNewTask({ ...newTask, description: text })}
+              style={{ marginBottom: 8 }}
+              mode="outlined"
+              multiline
+              numberOfLines={3}
+              autoCapitalize="sentences"
+            />
+            <Menu
+              visible={priorityMenuVisible}
+              onDismiss={() => setPriorityMenuVisible(false)}
+              anchor={
+                <Button mode="outlined" onPress={() => setPriorityMenuVisible(true)} style={{ marginVertical: 8 }}>
+                  {t('taskTable.input.priority')}: {newTask.priority}
+                </Button>
+              }
+            >
+              <Menu.Item
+                onPress={() => {
+                  setNewTask({ ...newTask, priority: 'Low' });
+                  setPriorityMenuVisible(false);
+                }}
+                title="Low"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setNewTask({ ...newTask, priority: 'Medium' });
+                  setPriorityMenuVisible(false);
+                }}
+                title="Medium"
+              />
+              <Menu.Item
+                onPress={() => {
+                  setNewTask({ ...newTask, priority: 'High' });
+                  setPriorityMenuVisible(false);
+                }}
+                title="High"
+              />
+            </Menu>
+            <TextInput
+              label={t('taskTable.input.dueDate')}
+              value={newTask.dueDate}
+              onChangeText={handleDueDateChange}
+              style={{ marginBottom: 8 }}
+              mode="outlined"
+              keyboardType="numeric"
+              maxLength={10}
+              placeholder="MM/DD/YYYY"
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setIsAddDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
+            <Button mode="contained" onPress={submitNewTask}>{t('taskTable.dialog.addTask')}</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        action={{
+          label: t('taskTable.dialog.dismiss'),
+          onPress: () => setSnackbarVisible(false),
+        }}
+      >
+        {error}
+      </Snackbar>
+    </Surface>
   );
 };
 
+export default TaskTable;
+
 const styles = StyleSheet.create({
-  outerContainer: {
+  container: {
     flex: 1,
-    padding: 15,
-  },
-  addContainer: {
-    width: '40%',
-    marginBottom: 15,
-  },
-  addButton: {
-    paddingVertical: 12,
+    elevation: 4,
     borderRadius: 12,
-    shadowColor: '#007bff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-    alignItems: 'center'
+    backgroundColor: 'white',
+    maxHeight: '100%',
+    paddingHorizontal: 10,
   },
-  addButtonText: {
-    fontWeight: '700',
-    fontSize: 16,
-    color: '#fff'
-  },
-  tableContainer: {
-    flex: 1,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    shadowColor: '#343a40',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 2,
-    overflow: 'hidden',
-  },
-  tableContent: {
+  scrollView: {
     flex: 1,
   },
-  tableHeaderRow: {
-    flexDirection: 'row',
-    backgroundColor: '#343a40',
-    paddingVertical: 8,
-    zIndex: 1,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#dee2e6',
-    paddingVertical: 8,
-    alignItems: 'center'
+  contentContainer: {
+    flexGrow: 1,
+    paddingBottom: 16,
   },
   tableHeader: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '700',
-    fontSize: 16
-  },
-  tableBody: {
-    flex: 1,
-    maxHeight: '100%',
-  },
-  tableBodyContent: {
-    flexGrow: 1,
-  },
-  tableCell: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 13
-  },
-  actionButtons: {
-    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-evenly'
-  },
-  iconButton: {
-    padding: 4
-  },
-  modalWrapper: {
-    position: 'absolute',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    position: 'sticky',
     top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     zIndex: 10,
-    elevation: 10,
-    justifyContent: 'center',
+  },
+  headerText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  headerTitleCell: {
+    flex: 1.5,
+  },
+  headerStatusCell: {
+    flex: 1,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)'
   },
-  modalContent: {
-    width: '90%',
+  headerPriorityCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerActionCell: {
+    width: 50,
+    alignItems: 'center',
+  },
+  row: {
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  titleCell: {
+    flex: 1.5,
+  },
+  statusCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  priorityCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  actionCell: {
+    width: 50,
+    alignItems: 'center',
+  },
+  titleText: {
+    fontSize: 14,
+  },
+  statusChip: {
+    height: 28,
+  },
+  priorityChip: {
+    height: 28,
+  },
+  dialog: {
+    backgroundColor: 'white',
     borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#343a40'
+    padding: 8,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ced4da',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 15,
-    backgroundColor: '#fff',
-    fontSize: 14
+    marginBottom: 16,
+    backgroundColor: '#f8f9fa',
   },
-  statictextcontainer: {
-    borderWidth: 1,
-    borderColor: '#ced4da',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 15,
-    backgroundColor: '#e9ecef'
+  detailsCard: {
+    padding: 8,
+    marginBottom: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
-  staticText: {
-    fontSize: 14,
-    textAlign: 'center'
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    marginTop: 20
-  },
-  modalButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    shadowColor: '#007bff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4
-  },
-  cancelModalButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    shadowColor: '#dc3545',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14
-  },
-  loadingText: {
-    fontSize: 16,
+  dialogTitle: {
     fontWeight: 'bold',
+    fontSize: 18,
+    marginBottom: 16,
+  },
+  actionIcon: {
+    padding: 4,
+  },
+  buttonContainer: {
+    marginTop: 16,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  addTaskButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  addTaskText: {
+    marginLeft: 8,
+    color: '#6366f1',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  emptyContainer: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#6b7280',
     textAlign: 'center',
-    marginTop: 20
-  }
+  },
+  listFooter: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  statusToggleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  statusToggleLabel: {
+    marginRight: 8,
+    fontSize: 14,
+  },
 });
-
-export default TaskTable;

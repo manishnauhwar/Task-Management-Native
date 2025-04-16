@@ -1,227 +1,280 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { LoginManager, AccessToken, Profile } from 'react-native-fbsdk-next';
+import axiosInstance from './axiosinstance';
 
-
-const API_URL = 'https://67dd0778e00db03c4069dbf8.mockapi.io/users';
 const TOKEN_KEY = '@auth_token';
 const USER_KEY = '@user_data';
 
-
-const generateToken = (email) => {
-  return Date.now() + '-' + email + '-' + Math.random().toString(36).substring(2, 15);
-};
-
-// Store auth data in AsyncStorage
 const storeAuthData = async (token, userData) => {
-  await AsyncStorage.setItem(TOKEN_KEY, token);
-  await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+  try {
+    await AsyncStorage.setItem(TOKEN_KEY, token);
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+  } catch (error) {
+    console.error('Error storing auth data:', error);
+    throw new Error('Failed to store authentication data');
+  }
 };
 
-// Configure Google Sign-In with optimal parameters for Android
-try {
-  GoogleSignin.configure({
-    webClientId: '63084503455-k3p98g2cb25932trloj5v04f1l57g6dh.apps.googleusercontent.com',
-    offlineAccess: false,
-    forceCodeForRefreshToken: false,
+const validateToken = (token) => {
+  try {
+    if (!token || typeof token !== 'string') {
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Token validation error:', error);
+    return false;
+  }
+};
 
-    scopes: ['email'],
-
-    accountName: '',
-  });
-} catch (error) {
-  console.error('Failed to configure Google Sign-In:', error);
-}
-
-// Email Login
 export const emailLogin = async (email, password) => {
   try {
-    if (!email || !password) throw new Error('Email and password are required');
+    if (!email || !password) {
+      throw new Error('Email and password are required');
+    }
 
-    const { data } = await axios.get(`${API_URL}?email=${email}`);
-    if (data.length === 0) throw new Error('User not found');
+    const response = await axiosInstance.post('/users/login', {
+      email,
+      password,
+    });
 
-    const user = data[0];
-    if (user.password !== password) throw new Error('Incorrect password');
+    if (!response.data || !response.data.token || !response.data.user) {
+      throw new Error('Invalid response from server');
+    }
 
-    const token = Date.now() + '-' + email;
+    const { token, user } = response.data;
+
+    if (!validateToken(token)) {
+      throw new Error('Invalid token received');
+    }
+
+    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
     await storeAuthData(token, user);
-
     return { token, user };
   } catch (error) {
     console.error('Login error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Login failed');
+    }
     throw error;
   }
 };
 
-// Email Signup
 export const emailSignup = async (email, password, name) => {
   try {
-    console.log('Starting signup process for:', email);
+    if (!email || !password || !name) {
+      throw new Error('All fields are required');
+    }
 
-    const newUser = {
-      name,
+    const response = await axiosInstance.post('/users/signup', {
       email,
       password,
-      role: 'Developer'
-    };
+      fullname: name,
+    });
 
+    if (!response.data) {
+      throw new Error('Invalid response from server');
+    }
 
-    const response = await axios.post(API_URL, newUser);
-    return { user: newUser };
+    return response.data;
   } catch (error) {
-    console.error('Signup error details:', error.response ? error.response.data : error.message);
+    console.error('Signup error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Signup failed');
+    }
     throw error;
   }
 };
 
-
-
-
-// Get current user from storage
 export const getCurrentUser = async () => {
   try {
-    const userJson = await AsyncStorage.getItem(USER_KEY);
-    return userJson ? JSON.parse(userJson) : null;
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const userData = await AsyncStorage.getItem(USER_KEY);
+
+    if (!token || !userData) {
+      return null;
+    }
+
+    if (!validateToken(token)) {
+      await logout();
+      return null;
+    }
+
+    return JSON.parse(userData);
   } catch (error) {
-    console.error('Get user error:', error);
+    console.error('Error getting current user:', error);
     return null;
   }
 };
 
-// Check if user is logged in
-export const isLoggedIn = async () => {
+export const isAuthenticated = async () => {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
-    const userJson = await AsyncStorage.getItem(USER_KEY);
-    return !!token && !!userJson;
+    if (!token) return false;
+
+    return validateToken(token);
   } catch (error) {
+    console.error('Error checking authentication:', error);
     return false;
   }
 };
 
-// Logout function 
 export const logout = async () => {
   try {
-    if (GoogleSignin) {
-      try {
-        const isSignedIn = await GoogleSignin.isSignedIn();
-        if (isSignedIn) await GoogleSignin.signOut();
-      } catch (error) { }
-    }
-
-    try {
-      LoginManager.logOut();
-    } catch (error) { }
-
-    await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
-    return true;
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    await AsyncStorage.removeItem(USER_KEY);
+    delete axiosInstance.defaults.headers.common['Authorization'];
   } catch (error) {
     console.error('Logout error:', error);
-    return false;
+    throw new Error('Failed to logout');
   }
 };
-
-
-const createMockGoogleUser = async () => {
-  const userId = 'G' + Math.floor(Math.random() * 1000000);
-
-  const userData = {
-    id: userId,
-    name: 'Google User',
-    email: `googleuser${userId.substring(1)}@gmail.com`,
-    photoURL: 'https://ui-avatars.com/api/?name=Google+User&background=4285F4&color=fff',
-    role: 'Developer',
-    provider: 'google'
-  };
-
-  const token = `google-mock-${Date.now()}-${userId}`;
-  await storeAuthData(token, userData);
-
-  return { token, user: userData };
-};
-
 
 export const googleLogin = async () => {
   try {
+    await GoogleSignin.configure({
+      webClientId: process.env.GOOGLE_CLIENT_ID,
+      offlineAccess: true,
+    });
 
-    try {
-      await GoogleSignin.signOut();
-    } catch (signOutError) {
+    const { idToken } = await GoogleSignin.signIn();
 
+    if (!idToken) {
+      throw new Error('Failed to get ID token from Google');
     }
 
+    const response = await axiosInstance.post('/google', {
+      token: idToken,
+    });
 
-    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-
-
-    const userInfo = await GoogleSignin.signIn();
-
-    if (userInfo && userInfo.user) {
-      const userData = {
-        id: 'G' + Math.floor(Math.random() * 10000),
-        name: userInfo.user.name || 'Google User',
-        email: userInfo.user.email,
-        photoURL: userInfo.user.photo,
-        role: 'Developer',
-        provider: 'google'
-      };
-
-      const token = userInfo.idToken || `google-${Date.now()}`;
-      await storeAuthData(token, userData);
-
-      return { token, user: userData };
-    } else {
-
-      console.log('No user info from Google, using fallback');
-      return createMockGoogleUser();
+    if (!response.data || !response.data.token || !response.data.user) {
+      throw new Error('Invalid response from server');
     }
+
+    const token = response.data.token;
+    const user = response.data.user;
+
+    if (!validateToken(token)) {
+      throw new Error('Invalid token received');
+    }
+
+    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    await storeAuthData(token, user);
+    return { token, user };
   } catch (error) {
-    if (error.toString().includes('ApiException')) {
-      console.log('Using Google mock login (ApiException occurred)');
-      return createMockGoogleUser();
-    }
-
+    console.error('Google login error:', error);
     if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-      throw new Error('Sign in was cancelled');
+      throw new Error('Google sign-in was cancelled');
     } else if (error.code === statusCodes.IN_PROGRESS) {
-      throw new Error('Sign in is already in progress');
+      throw new Error('Google sign-in is in progress');
     } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-      console.log('Play Services not available, using mock auth');
-      return createMockGoogleUser();
+      throw new Error('Google Play Services are not available');
+    } else if (error.response) {
+      throw new Error(error.response.data?.message || 'Google login failed');
     }
-    console.log('Using Google mock login due to error:', error.message || 'Unknown error');
-    return createMockGoogleUser();
+    throw error;
   }
 };
 
-export const facebookLogin = async () => {
+export const forgotPassword = async (email) => {
   try {
-    LoginManager.logOut();
-    const result = await LoginManager.logInWithPermissions(['public_profile', 'email']);
+    if (!email) {
+      throw new Error('Email is required');
+    }
 
-    if (result.isCancelled) throw new Error('Facebook login was cancelled');
+    const response = await axiosInstance.get(`/users/check-email/${email}`);
 
-    const data = await AccessToken.getCurrentAccessToken();
-    if (!data) throw new Error('Failed to get Facebook access token');
+    if (!response.data) {
+      throw new Error('Invalid response from server');
+    }
 
-    const profile = await Profile.getCurrentProfile();
-    if (!profile) throw new Error('Failed to get Facebook profile');
-
-    const userData = {
-      id: 'F' + profile.userID,
-      name: profile.name,
-      email: `${profile.userID}@facebook.com`,
-      photoURL: profile.imageURL,
-      role: 'Developer',
-      provider: 'facebook'
-    };
-
-    await storeAuthData(data.accessToken.toString(), userData);
-    return { token: data.accessToken.toString(), user: userData };
+    return response.data;
   } catch (error) {
-    console.error('Facebook login error:', error);
+    console.error('Forgot password error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Password reset request failed');
+    }
     throw error;
+  }
+};
+
+export const verifyResetToken = async (token) => {
+  try {
+    if (!token) {
+      throw new Error('Reset token is required');
+    }
+
+    const response = await axiosInstance.get(`/users/verify-reset-token/${token}`);
+
+    if (!response.data) {
+      throw new Error('Invalid response from server');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('Token verification error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Invalid or expired reset token');
+    }
+    throw error;
+  }
+};
+
+export const resetPassword = async (token, newPassword) => {
+  try {
+    if (!token || !newPassword) {
+      throw new Error('Token and new password are required');
+    }
+
+    const response = await axiosInstance.post(`/users/reset-password/${token}`, {
+      newPassword,
+    });
+
+    if (!response.data) {
+      throw new Error('Invalid response from server');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('Reset password error:', error);
+    if (error.response) {
+      throw new Error(error.response.data?.message || 'Password reset failed');
+    }
+    throw error;
+  }
+};
+
+export const checkAuthStatus = async (navigation) => {
+  try {
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+    const userData = await AsyncStorage.getItem(USER_KEY);
+
+    if (!token || !userData) {
+      console.log('No auth token found, redirecting to login');
+      navigation.replace('Login');
+      return false;
+    }
+
+    if (!validateToken(token)) {
+      console.log('Invalid token format, logging out');
+      await AsyncStorage.removeItem(TOKEN_KEY);
+      await AsyncStorage.removeItem(USER_KEY);
+      navigation.replace('Login');
+      return false;
+    }
+
+    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+    console.log('Token and user data found, proceeding to dashboard');
+    navigation.replace('DashboardTabs');
+    return true;
+
+  } catch (error) {
+    console.error('Error checking auth status:', error);
+    navigation.replace('Login');
+    return false;
   }
 };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
-import { googleLogin, facebookLogin, emailSignup } from '../utils/authService';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
+import { emailSignup, googleLogin } from '../utils/authService';
 import { useTheme } from '../utils/ThemeContext';
 
 const SignupScreen = ({ navigation }) => {
@@ -8,43 +8,46 @@ const SignupScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { theme } = useTheme();
 
   const handleSignup = async () => {
+    if (!email || !password || !name) {
+      setError('Please fill in all fields');
+      return;
+    }
+
     try {
       setLoading(true);
+      setError('');
+
       await emailSignup(email, password, name);
-      alert('Signup successful! Please login to continue.');
-      navigation.replace('Login');
-    } catch (error) {
-      alert(error.message);
+
+      Alert.alert(
+        'Success',
+        'Account created successfully! Please login.',
+        [{ text: 'OK', onPress: () => navigation.replace('Login') }]
+      );
+    } catch (err) {
+      console.log('Signup error:', err.message);
+      setError(err.message || 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
-
 
   const handleGoogleSignup = async () => {
     try {
       setLoading(true);
-      const { token, user } = await googleLogin();
-      console.log('Google signup successful', { token, user });
-      navigation.replace('DashboardTabs');
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      setError('');
 
-  const handleFacebookSignup = async () => {
-    try {
-      setLoading(true);
-      const { token, user } = await facebookLogin();
-      console.log('Facebook signup successful', { token, user });
+      const { token, user } = await googleLogin();
+      console.log('Google signup successful:', user);
       navigation.replace('DashboardTabs');
-    } catch (error) {
-      alert(error.message);
+    } catch (err) {
+      console.error('Google signup error:', err);
+      const errorMessage = err.message || 'Google signup failed. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -55,6 +58,9 @@ const SignupScreen = ({ navigation }) => {
       <Image source={require('../assets/img.jpg')} style={styles.image} />
       <View style={[styles.formContainer, { backgroundColor: theme.background }]}>
         <Text style={[styles.title, { color: theme.text }]}>Signup</Text>
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
         <TextInput
           style={[styles.input, {
             backgroundColor: theme.inputBackground,
@@ -66,6 +72,7 @@ const SignupScreen = ({ navigation }) => {
           value={name}
           onChangeText={setName}
         />
+
         <TextInput
           style={[styles.input, {
             backgroundColor: theme.inputBackground,
@@ -76,7 +83,10 @@ const SignupScreen = ({ navigation }) => {
           placeholderTextColor={theme.placeholder}
           value={email}
           onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
         />
+
         <TextInput
           style={[styles.input, {
             backgroundColor: theme.inputBackground,
@@ -115,16 +125,6 @@ const SignupScreen = ({ navigation }) => {
           disabled={loading}
         >
           <Text style={styles.buttonText}>Sign up with Google</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, styles.facebookButton, {
-            shadowColor: theme.shadowColor
-          }]}
-          onPress={handleFacebookSignup}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>Sign up with Facebook</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -181,9 +181,6 @@ const styles = StyleSheet.create({
   googleButton: {
     backgroundColor: '#db4437'
   },
-  facebookButton: {
-    backgroundColor: '#4267B2'
-  },
   buttonText: {
     color: '#fff',
     fontSize: 16
@@ -195,6 +192,11 @@ const styles = StyleSheet.create({
   },
   link: {
     marginTop: 10
+  },
+  errorText: {
+    color: 'red',
+    marginBottom: 10,
+    textAlign: 'center',
   }
 });
 

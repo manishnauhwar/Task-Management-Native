@@ -1,30 +1,32 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator } from 'react-native';
-import { googleLogin, facebookLogin, emailLogin } from '../utils/authService';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
+import { emailLogin, googleLogin } from '../utils/authService';
 import { useTheme } from '../utils/ThemeContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  LoginManager,
-  AccessToken,
-  Profile,
-  GraphRequest,
-  GraphRequestManager
-} from 'react-native-fbsdk-next';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { theme } = useTheme();
 
   const handleLogin = async () => {
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
     try {
       setLoading(true);
+      setError('');
+
       const { token, user } = await emailLogin(email, password);
-      console.log('Login successful', { token, user });
+
+      console.log('Login successful:', user);
       navigation.replace('DashboardTabs');
-    } catch (error) {
-      alert(error.message);
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -33,29 +35,15 @@ const LoginScreen = ({ navigation }) => {
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
+      setError('');
+
       const { token, user } = await googleLogin();
-      console.log('Google login successful', { token, user });
+
+      console.log('Google login successful:', user);
       navigation.replace('DashboardTabs');
     } catch (error) {
-      alert(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleFacebookLogin = async () => {
-    try {
-      setLoading(true);
- 
-      await AsyncStorage.removeItem('@auth_token');
-      await AsyncStorage.removeItem('@user_data');
-
-      const { token, user } = await facebookLogin();
-      console.log('Facebook login successful', { token, user });
-      navigation.replace('DashboardTabs');
-    } catch (error) {
-      console.error('Facebook login error:', error);
-      alert(error.message || 'Facebook login failed. Please try again.');
+      console.error('Google authentication error:', error);
+      setError(error.message || 'Google authentication failed');
     } finally {
       setLoading(false);
     }
@@ -66,6 +54,9 @@ const LoginScreen = ({ navigation }) => {
       <Image source={require('../assets/img.jpg')} style={styles.image} />
       <View style={[styles.formContainer, { backgroundColor: theme.background }]}>
         <Text style={[styles.title, { color: theme.text }]}>Login</Text>
+
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
         <TextInput
           style={[styles.input, {
             backgroundColor: theme.inputBackground,
@@ -76,7 +67,10 @@ const LoginScreen = ({ navigation }) => {
           placeholderTextColor={theme.placeholder}
           value={email}
           onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
         />
+
         <TextInput
           style={[styles.input, {
             backgroundColor: theme.inputBackground,
@@ -121,17 +115,9 @@ const LoginScreen = ({ navigation }) => {
             shadowColor: theme.shadowColor
           }]}
           onPress={handleGoogleLogin}
+          disabled={loading}
         >
           <Text style={styles.buttonText}>Login with Google</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, styles.facebookButton, {
-            shadowColor: theme.shadowColor
-          }]}
-          onPress={handleFacebookLogin}
-        >
-          <Text style={styles.buttonText}>Login with Facebook</Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
@@ -186,9 +172,6 @@ const styles = StyleSheet.create({
   googleButton: {
     backgroundColor: '#db4437',
   },
-  facebookButton: {
-    backgroundColor: '#4267B2',
-  },
   buttonText: {
     color: '#fff',
     fontSize: 16
@@ -201,11 +184,10 @@ const styles = StyleSheet.create({
   link: {
     marginTop: 10,
   },
-  forgottextbox: {
-    display: 'flex'
-  },
-  forgottext: {
+  errorText: {
+    color: 'red',
     marginBottom: 10,
+    textAlign: 'center',
   },
   forgotPasswordContainer: {
     width: 300,

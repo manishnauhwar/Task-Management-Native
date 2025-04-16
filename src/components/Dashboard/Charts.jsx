@@ -1,149 +1,371 @@
-import { StyleSheet, Text, View, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Text, View, StyleSheet, Dimensions, ScrollView } from 'react-native';
 import { PieChart, LineChart } from 'react-native-chart-kit';
-import axios from 'axios';
+import { Card, ActivityIndicator, Title, useTheme as usePaperTheme } from 'react-native-paper';
+import axiosInstance from '../../utils/axiosinstance';
 import { useTheme } from '../../utils/ThemeContext';
+import { getCurrentUser } from '../../utils/authService';
+import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
+const chartWidth = screenWidth * 0.7;
 
 const Charts = () => {
   const { theme } = useTheme();
+  const paperTheme = usePaperTheme();
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState([]);
-  const [prevstat, setPrevstat] = useState([]);
+  const [monthlyStats, setMonthlyStats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [error, setError] = useState(null);
+  const [teamMembers, setTeamMembers] = useState([]);
 
-  useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const res = await axios.get('https://67dd0778e00db03c4069dbf8.mockapi.io/tasks');
-        setTasks(res.data || []);
-      } catch (error) {
-        setTasks([]);
-      }
-    };
+  const loadUser = async () => {
+    try {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      return currentUser;
+    } catch (error) {
+      console.error('Error loading user:', error);
+      setError('Failed to load user information');
+      return null;
+    }
+  };
 
-    const fetchPrevTasks = async () => {
-      try {
-        const res = await axios.get('https://67dd2525e00db03c406a5c23.mockapi.io/taskStatistics');
-        setPrevstat(res.data || []);
-      } catch (error) {
-        setPrevstat([]);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const currentUser = await loadUser();
+      if (!currentUser) {
+        setLoading(false);
+        return;
       }
+      const tasksResponse = await axiosInstance.get('/tasks');
+
+      if (currentUser.role === 'admin') {
+        setTasks(tasksResponse.data);
+        generateMonthlyStats(tasksResponse.data);
+      } else if (currentUser.role === 'manager') {
+        try {
+          const teamsResponse = await axiosInstance.get('/teams');
+          const managedTeams = teamsResponse.data.filter(
+            team => team.manager && team.manager._id === currentUser.id
+          );
+          const teamMemberIds = [];
+          managedTeams.forEach(team => {
+            if (team.members && team.members.length > 0) {
+              team.members.forEach(member => {
+                teamMemberIds.push(member._id);
+              });
+            }
+          });
+          setTeamMembers(teamMemberIds);
+          const managerTasks = tasksResponse.data.filter(task =>
+            task.userId === currentUser.id ||
+            teamMemberIds.includes(task.userId) ||
+            task.assignedTo === currentUser.id ||
+            teamMemberIds.includes(task.assignedTo)
+          );
+          setTasks(managerTasks);
+          generateMonthlyStats(managerTasks);
+        } catch (error) {
+          console.error('Error fetching teams:', error);
+          const managerTasks = tasksResponse.data.filter(
+            task => task.userId === currentUser.id || task.assignedTo === currentUser.id
+          );
+          setTasks(managerTasks);
+          generateMonthlyStats(managerTasks);
+        }
+      } else {
+        const userTasks = tasksResponse.data.filter(
+          task => task.userId === currentUser.id || task.assignedTo === currentUser.id
+        );
+        setTasks(userTasks);
+        generateMonthlyStats(userTasks);
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError('Failed to load tasks');
+    } finally {
       setLoading(false);
-    };
+    }
+  };
 
-    fetchTasks();
-    fetchPrevTasks();
-  }, []);
+  const generateMonthlyStats = (taskData) => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    const monthlyData = [];
+    for (let i = 5; i >= 0; i--) {
+      let month = currentMonth - i;
+      let year = currentYear;
+      if (month < 0) {
+        month = 12 + month;
+        year--;
+      }
+      const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'short' });
+      const completedTasksInMonth = taskData.filter(task => {
+        if (!task.completedDate || task.status?.toLowerCase() !== 'completed') return false;
+        try {
+          const completedDate = new Date(task.completedDate);
+          return completedDate.getMonth() === month && completedDate.getFullYear() === year;
+        } catch (error) {
+          return false;
+        }
+      }).length;
+      const totalTasksInMonth = taskData.filter(task => {
+        if (!task.createdAt) return false;
+        try {
+          const createdDate = new Date(task.createdAt);
+          return createdDate.getMonth() === month && createdDate.getFullYear() === year;
+        } catch (error) {
+          return false;
+        }
+      }).length;
+      monthlyData.push({
+        month: monthName,
+        year: year,
+        completedTasks: completedTasksInMonth,
+        totalTasks: totalTasksInMonth
+      });
+    }
+    setMonthlyStats(monthlyData);
+  };
 
-  const totalTasks = tasks?.length || 0;
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+      return () => {
+        
+      };
+    }, [])
+  );
+
   const completedTasks = tasks?.filter(task => task.status?.toLowerCase() === 'completed').length || 0;
-  const overdueTasks = tasks?.filter(task => task.status?.toLowerCase() === 'overdue').length || 0;
-  const pendingTasks = Math.max(totalTasks - (completedTasks + overdueTasks), 0);
-  const today = new Date().toISOString().split('T')[0];
-  const tasksDueToday = tasks?.filter(task => {
+  const pendingTasks = tasks?.filter(task =>
+    task.status?.toLowerCase() === 'to do' ||
+    task.status?.toLowerCase() === 'in progress'
+  ).length || 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const overdueTasks = tasks?.filter(task => {
     if (!task.dueDate) return false;
     try {
-      return new Date(task.dueDate).toISOString().split('T')[0] === today;
+      const dueDate = new Date(task.dueDate);
+      dueDate.setHours(0, 0, 0, 0);
+      return dueDate < today && task.status?.toLowerCase() !== 'completed';
     } catch (error) {
       console.log('Invalid date for task:', task.id);
       return false;
     }
   }).length || 0;
 
+  const highPriorityTasks = tasks?.filter(task => task.priority?.toLowerCase() === 'high').length || 0;
+  const mediumPriorityTasks = tasks?.filter(task => task.priority?.toLowerCase() === 'medium').length || 0;
+  const lowPriorityTasks = tasks?.filter(task => task.priority?.toLowerCase() === 'low').length || 0;
+
+  const statusColors = {
+    completed: '#4ade80',
+    pending: '#facc15',
+    overdue: '#f87171',
+  };
+
+  const priorityColors = {
+    high: '#ef4444',
+    medium: '#fb923c',
+    low: '#60a5fa',
+  };
+
   const chartData = [
-    { name: 'Completed', population: completedTasks, color: '#4CAF50', legendFontColor: theme.text, legendFontSize: 12 },
-    { name: 'Pending', population: pendingTasks, color: '#FFC107', legendFontColor: theme.text, legendFontSize: 12 },
-    { name: 'Overdue', population: overdueTasks, color: '#F44336', legendFontColor: theme.text, legendFontSize: 12 }
+    { name: t('charts.legend.completed'), population: completedTasks, color: statusColors.completed, legendFontColor: theme.text, legendFontSize: 10, key: 'completed-segment' },
+    { name: t('charts.legend.pending', 'Pending'), population: pendingTasks, color: statusColors.pending, legendFontColor: theme.text, legendFontSize: 10, key: 'pending-segment' },
+    { name: t('charts.legend.overdue', 'Overdue'), population: overdueTasks, color: statusColors.overdue, legendFontColor: theme.text, legendFontSize: 10, key: 'overdue-segment' }
+  ];
+
+  const priorityData = [
+    { name: t('charts.legend.high', 'High'), population: highPriorityTasks, color: priorityColors.high, legendFontColor: theme.text, legendFontSize: 10, key: 'high-priority-segment' },
+    { name: t('charts.legend.medium', 'Medium'), population: mediumPriorityTasks, color: priorityColors.medium, legendFontColor: theme.text, legendFontSize: 10, key: 'medium-priority-segment' },
+    { name: t('charts.legend.low', 'Low'), population: lowPriorityTasks, color: priorityColors.low, legendFontColor: theme.text, legendFontSize: 10, key: 'low-priority-segment' }
   ];
 
   const lineChartData = {
-    labels: prevstat.map(stat => stat.year.toString()),
+    labels: monthlyStats.map(stat => stat.month),
     datasets: [
-      { data: prevstat.map(stat => stat.completedTasks), color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`, strokeWidth: 2 },
-      { data: prevstat.map(stat => stat.totalTasks), color: (opacity = 1) => `rgba(255, 99, 132, ${opacity})`, strokeWidth: 2 }
+      { data: monthlyStats.map(stat => stat.completedTasks), color: () => statusColors.completed, strokeWidth: 2 },
+      { data: monthlyStats.map(stat => stat.totalTasks), color: () => '#8b5cf6', strokeWidth: 2 }
     ]
   };
 
   const chartConfig = {
-    backgroundGradientFrom: theme.background,
-    backgroundGradientTo: theme.background,
-    color: () => theme.text,
-    labelColor: () => theme.text,
+    backgroundGradientFrom: theme.cardBackground,
+    backgroundGradientTo: theme.cardBackground,
+    color: (opacity = 1) => `rgba(${theme.text === '#ffffff' ? '255, 255, 255' : '0, 0, 0'}, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(${theme.text === '#ffffff' ? '255, 255, 255' : '0, 0, 0'}, ${opacity})`,
     decimalPlaces: 0,
-    fillShadowGradient: '#ffa726',
+    fillShadowGradient: paperTheme.colors.primary,
     fillShadowGradientOpacity: 0.2,
-    propsForDots: { r: '4', strokeWidth: '2', stroke: '#ffa726' }
+    propsForDots: { r: '3', strokeWidth: '1', stroke: paperTheme.colors.primary }
+  };
+
+  const getChartTitle = () => {
+    if (user?.role === 'admin') {
+      return t('charts.allTasksAnalytics');
+    } else if (user?.role === 'manager') {
+      return t('charts.teamTasksAnalytics');
+    } else {
+      return t('charts.myTasksAnalytics');
+    }
   };
 
   if (loading) {
-    return <ActivityIndicator size="large" color="#0000ff" style={styles.loader} />;
+    return <ActivityIndicator style={styles.loader} size="large" color={paperTheme.colors.primary} />;
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.errorText, { color: theme.text }]}>{error}</Text>
+      </View>
+    );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.mainContainer}>
-      <View style={styles.cardContainer}>
-        <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Total Tasks</Text>
-          <Text style={[styles.cardNumber, { color: theme.text }]}>{totalTasks}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Due Today</Text>
-          <Text style={[styles.cardNumber, { color: theme.text }]}>{tasksDueToday}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Completed</Text>
-          <Text style={[styles.cardNumber, { color: theme.text }]}>{completedTasks}</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Overdue</Text>
-          <Text style={[styles.cardNumber, { color: theme.text }]}>{overdueTasks}</Text>
-        </View>
-      </View>
+    <View style={styles.container}>
+      <Title style={[styles.sectionTitle, { color: theme.text }]}>{getChartTitle()}</Title>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.horizontalScrollContainer}
+      >
+        <Card style={[styles.chartCard, { backgroundColor: theme.cardBackground }]} elevation={3}>
+          <Card.Content style={styles.chartContent}>
+            <Text style={[styles.chartTitle, { color: theme.text }]}>{t('charts.statusDistribution')}</Text>
+            <PieChart
+              data={chartData}
+              width={chartWidth}
+              height={150}
+              chartConfig={chartConfig}
+              accessor="population"
+              backgroundColor="transparent"
+              paddingLeft="10"
+              hasLegend={true}
+              center={[10, 0]}
+              absolute
+            />
+          </Card.Content>
+        </Card>
 
-      <View style={[styles.chartContainer, { backgroundColor: theme.cardBackground }]}>
-        <Text style={[styles.subHeading, { color: theme.text }]}>Task Distribution</Text>
-        <PieChart
-          data={chartData}
-          width={screenWidth - 40}
-          height={220}
-          chartConfig={chartConfig}
-          accessor="population"
-          backgroundColor="transparent"
-          paddingLeft="20"
-          absolute
-        />
-      </View>
+        <Card style={[styles.chartCard, { backgroundColor: theme.cardBackground }]} elevation={3}>
+          <Card.Content style={styles.chartContent}>
+            <Text style={[styles.chartTitle, { color: theme.text }]}>{t('charts.priorityDistribution')}</Text>
+            <PieChart
+              data={priorityData}
+              width={chartWidth}
+              height={150}
+              chartConfig={chartConfig}
+              accessor="population"
+              backgroundColor="transparent"
+              paddingLeft="10"
+              hasLegend={true}
+              center={[10, 0]}
+              absolute
+            />
+          </Card.Content>
+        </Card>
 
-      {prevstat.length > 0 && (
-        <View style={[styles.chartContainer, { backgroundColor: theme.cardBackground }]}>
-          <Text style={[styles.subHeading, { color: theme.text }]}>Task Completion Over the Years</Text>
-          <LineChart
-            data={lineChartData}
-            width={screenWidth - 70}
-            height={220}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.lineChartStyle}
-            withInnerLines
-            withOuterLines={false}
-          />
-        </View>
-      )}
-    </ScrollView>
+        <Card style={[styles.chartCard, { backgroundColor: theme.cardBackground }]} elevation={3}>
+          <Card.Content style={styles.chartContent}>
+            <Text style={[styles.chartTitle, { color: theme.text }]}>{t('charts.monthlyTaskCompletion')}</Text>
+            <LineChart
+              data={lineChartData}
+              width={chartWidth}
+              height={150}
+              chartConfig={chartConfig}
+              bezier
+              style={styles.lineChart}
+              withInnerLines={false}
+              withOuterLines={false}
+              withShadow={false}
+              withDots={true}
+              formatYLabel={(value) => Math.round(value)}
+            />
+            <View style={styles.legendContainer}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: statusColors.completed }]} />
+                <Text style={[styles.legendText, { color: theme.text }]}>{t('charts.legend.completed')}</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: '#8b5cf6' }]} />
+                <Text style={[styles.legendText, { color: theme.text }]}>{t('charts.legend.total')}</Text>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+      </ScrollView>
+    </View>
   );
 };
 
-export default Charts;
-
 const styles = StyleSheet.create({
-  mainContainer: { flexGrow: 1, padding: 20 },
-  subHeading: { fontSize: 18, fontWeight: '600', marginBottom: 10, textAlign: 'center' },
-  cardContainer: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 20 },
-  statCard: { width: '47%', borderRadius: 10, paddingVertical: 15, paddingHorizontal: 10, marginBottom: 15, alignItems: 'center', shadowColor: '#ccc', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-  cardTitle: { fontSize: 16, fontWeight: '600' },
-  cardNumber: { fontSize: 20, fontWeight: '700', marginTop: 5 },
-  chartContainer: { width: '100%', borderRadius: 15, padding: 15, marginBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 4, alignItems: 'center' },
-  lineChartStyle: { marginVertical: 8, borderRadius: 10 },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  container: {
+    flex: 1,
+  },
+  loader: {
+    marginTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    marginLeft: 10,
+    marginBottom: 10,
+    fontWeight: 'bold',
+  },
+  horizontalScrollContainer: {
+    paddingLeft: 10,
+    paddingRight: 10,
+    paddingBottom:20
+  },
+  chartCard: {
+    width: chartWidth + 20,
+    marginRight: 15,
+  },
+  chartContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chartTitle: {
+    fontSize: 14,
+    marginBottom: 5,
+    fontWeight: 'bold',
+  },
+  lineChart: {
+    borderRadius: 10,
+  },
+  legendContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  legendColor: {
+    width: 10,
+    height: 10,
+    marginRight: 5,
+  },
+  legendText: {
+    fontSize: 10,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
+  },
 });
+
+export default Charts;

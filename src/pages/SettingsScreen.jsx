@@ -1,8 +1,23 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity, Modal, ScrollView, StatusBar, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Switch,
+  TouchableOpacity,
+  Modal,
+  ScrollView,
+  StatusBar,
+  Platform,
+} from 'react-native';
 import { useTheme } from '../utils/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
+import i18n, { saveLanguage } from '../i18n';
+import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axiosInstance from '../utils/axiosinstance';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const SettingsScreen = () => {
   const { theme, isDarkMode, setIsDarkMode } = useTheme();
@@ -10,24 +25,52 @@ const SettingsScreen = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [appNotifications, setAppNotifications] = useState(true);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
+  const [selectedLanguage, setSelectedLanguage] = useState(i18n.language);
+  const { t } = useTranslation();
 
   const languages = [
-    'English',
-    'Spanish',
-    'French',
-    'German',
-    'Chinese',
+    { label: 'English', code: 'en' },
+    { label: 'Hindi', code: 'hi' },
   ];
 
+  // Handle language selection
+  const handleLanguageChange = async (language) => {
+    setSelectedLanguage(language.code);
+    await saveLanguage(language.code);
+    setShowLanguageModal(false);
+  };
+
+  // Update notification preferences on the backend
+  const updateNotificationPreferences = async (type, value) => {
+    try {
+      await axiosInstance.patch('/notifications/preferences', { [type]: value });
+    } catch (error) {
+      console.error('Failed to update notification preferences:', error.message);
+    }
+  };
+
+  // Fetch current preferences on component mount
+  useEffect(() => {
+    const fetchPreferences = async () => {
+      try {
+        const res = await axiosInstance.get('/notifications/preferences');
+        const prefs = res.data.preferences;
+        setEmailNotifications(prefs.email);
+        setAppNotifications(prefs.inApp);
+      } catch (error) {
+        console.error('Error fetching notification preferences:', error.message);
+      }
+    };
+    fetchPreferences();
+  }, []);
+
+  // Reusable render function for setting items
   const renderSettingItem = (title, description, value, onValueChange) => (
     <View style={[styles.settingCard, { backgroundColor: theme.cardBackground }]}>
       <View style={styles.settingContent}>
         <Text style={[styles.settingTitle, { color: theme.text }]}>{title}</Text>
         {description && (
-          <Text style={[styles.settingDescription, { color: theme.placeholder }]}>
-            {description}
-          </Text>
+          <Text style={[styles.settingDescription, { color: theme.placeholder }]}>{description}</Text>
         )}
       </View>
       <Switch
@@ -40,63 +83,68 @@ const SettingsScreen = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <StatusBar
-        backgroundColor={theme.background}
-        barStyle={theme.statusBarStyle}
-      />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <StatusBar backgroundColor={theme.background} barStyle={theme.statusBarStyle} />
 
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Icon name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={[styles.heading, { color: theme.text }]}>Settings</Text>
+        <Text style={[styles.heading, { color: theme.text }]}>{t('settings.title')}</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.scrollContainer}>
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Appearance</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('settings.appearance')}</Text>
         {renderSettingItem(
-          'Dark Mode',
-          'Switch between light and dark theme',
+          t('settings.darkMode'),
+          t('settings.darkModeDesc'),
           isDarkMode,
           () => setIsDarkMode(!isDarkMode)
         )}
 
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Notifications</Text>
+        {/* Notification Preferences */}
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('settings.notifications')}</Text>
         {renderSettingItem(
-          'Email Notifications',
-          'Receive updates via email',
+          t('settings.emailNotifications'),
+          t('settings.emailDesc'),
           emailNotifications,
-          () => setEmailNotifications(!emailNotifications)
+          () => {
+            const newVal = !emailNotifications;
+            setEmailNotifications(newVal);
+            updateNotificationPreferences('email', newVal);
+          }
         )}
         {renderSettingItem(
-          'In-App Notifications',
-          'Receive notifications within the app',
+          t('settings.appNotifications'),
+          t('settings.appDesc'),
           appNotifications,
-          () => setAppNotifications(!appNotifications)
+          () => {
+            const newVal = !appNotifications;
+            setAppNotifications(newVal);
+            updateNotificationPreferences('inApp', newVal);
+          }
         )}
 
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Language</Text>
+        <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('settings.language')}</Text>
         <TouchableOpacity
           style={[styles.languageSelector, { backgroundColor: theme.cardBackground }]}
-          onPress={() => setShowLanguageModal(true)}
+          onPress={() => {
+            console.log('Language selector pressed');
+            setShowLanguageModal(true);
+          }}
         >
           <View style={styles.languageContent}>
-            <Text style={[styles.settingTitle, { color: theme.text }]}>
-              Selected Language
-            </Text>
+            <Text style={[styles.settingTitle, { color: theme.text }]}>{t('settings.selectedLanguage')}</Text>
             <Text style={[styles.selectedLanguage, { color: theme.placeholder }]}>
-              {selectedLanguage}
+              {languages.find((lang) => lang.code === selectedLanguage)?.label || 'English'}
             </Text>
           </View>
           <Icon name="arrow-forward-ios" size={20} color={theme.text} />
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Language selection modal */}
       <Modal
         visible={showLanguageModal}
         transparent
@@ -106,37 +154,25 @@ const SettingsScreen = () => {
         <View style={styles.modalContainer}>
           <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
-                Select Language
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowLanguageModal(false)}
-                style={styles.closeButton}
-              >
+              <Text style={[styles.modalTitle, { color: theme.text }]}>{t('settings.selectLanguage')}</Text>
+              <TouchableOpacity onPress={() => setShowLanguageModal(false)} style={styles.closeButton}>
                 <Icon name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
             {languages.map((language) => (
               <TouchableOpacity
-                key={language}
+                key={language.code}
                 style={[
                   styles.languageOption,
                   {
                     backgroundColor:
-                      selectedLanguage === language
-                        ? theme.primary + '20'
-                        : 'transparent',
+                      selectedLanguage === language.code ? theme.primary + '20' : 'transparent',
                   },
                 ]}
-                onPress={() => {
-                  setSelectedLanguage(language);
-                  setShowLanguageModal(false);
-                }}
+                onPress={() => handleLanguageChange(language)}
               >
-                <Text style={[styles.languageText, { color: theme.text }]}>
-                  {language}
-                </Text>
-                {selectedLanguage === language && (
+                <Text style={[styles.languageText, { color: theme.text }]}>{language.label}</Text>
+                {selectedLanguage === language.code && (
                   <Icon name="check" size={20} color={theme.primary} />
                 )}
               </TouchableOpacity>
@@ -144,135 +180,57 @@ const SettingsScreen = () => {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
+  container: { flex: 1 },
   header: {
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
-  backButton: {
-    padding: 8,
-    width: 40,
-  },
-  placeholder: {
-    width: 40,
-  },
-  heading: {
-    fontSize: 26,
-    fontWeight: '800',
-    flex: 1,
-    textAlign: 'center',
-  },
-  scrollContainer: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 24,
-    marginBottom: 16,
-  },
+  backButton: { padding: 8 },
+  heading: { flex: 1, textAlign: 'center', fontSize: 20, fontWeight: 'bold' },
+  placeholder: { width: 32 },
+  scrollContainer: { paddingHorizontal: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', marginVertical: 12 },
   settingCard: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    marginVertical: 6,
+    borderRadius: 8,
   },
-  settingContent: {
-    flex: 1,
-    marginRight: 16,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  settingDescription: {
-    fontSize: 14,
-  },
+  settingContent: { flex: 1 },
+  settingTitle: { fontSize: 16, fontWeight: '500' },
+  settingDescription: { fontSize: 14, marginTop: 4 },
   languageSelector: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    marginVertical: 6,
+    borderRadius: 8,
   },
-  languageContent: {
-    flex: 1,
-  },
-  selectedLanguage: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 16,
-    maxHeight: '70%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  closeButton: {
-    padding: 4,
-  },
+  languageContent: { flex: 1 },
+  selectedLanguage: { fontSize: 14, marginTop: 4 },
+  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#00000080' },
+  modalContent: { padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold' },
+  closeButton: { padding: 8 },
   languageOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     borderRadius: 8,
-    marginBottom: 8,
+    marginVertical: 4,
   },
-  languageText: {
-    fontSize: 16,
-  },
+  languageText: { fontSize: 16 },
 });
 
 export default SettingsScreen;
-

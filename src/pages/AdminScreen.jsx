@@ -1,453 +1,786 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, StatusBar, SectionList, Animated, PanResponder, Platform } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet,StatusBar,ScrollView,TouchableOpacity,  Modal,
+  TextInput,
+  Alert,
+} from 'react-native';
+import {
+  Card,
+  Text,
+  Avatar,
+  Chip,
+  Button,
+  Menu,
+  Surface,
+  useTheme as usePaperTheme,
+} from 'react-native-paper';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { createStackNavigator } from '@react-navigation/stack';
 import { useTheme } from '../utils/ThemeContext';
 import { useNotification } from '../utils/NotificationContext';
+import axiosInstance from '../utils/axiosinstance';
+import { getCurrentUser } from '../utils/authService';
 
-const TASKS_API = "https://67dd0778e00db03c4069dbf8.mockapi.io/tasks";
-const TEAMS_API = "https://67dd2525e00db03c406a5c23.mockapi.io/teams";
+const Stack = createStackNavigator();
 
-const ADMIN_INFO = {
-  name: "Ajeet Narvar",
-  email: "ajeet@example.com"
-};
+const TeamCard = ({ team, onEditTeam, onDeleteTeam }) => {
+  const paperTheme = usePaperTheme();
 
-const DraggableTask = ({ task, teamRanges, assignTaskToTeam, sectionListRef }) => {
-  const { theme } = useTheme();
-  const pan = useRef(new Animated.ValueXY()).current;
-  const [dragging, setDragging] = useState(false);
-  const taskRef = useRef(null);
-  const teamRangesRef = useRef(teamRanges);
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
 
-  useEffect(() => {
-    teamRangesRef.current = teamRanges;
-  }, [teamRanges]);
+  const getAvatarColor = (id) => {
+    const colors = [
+      '#FFCDD2', '#F8BBD0', '#E1BEE7', '#D1C4E9', '#C5CAE9',
+      '#BBDEFB', '#B3E5FC', '#B2EBF2', '#B2DFDB', '#C8E6C9',
+      '#DCEDC8', '#F0F4C3', '#FFF9C4', '#FFECB3', '#FFE0B2',
+    ];
+    const hash = String(id)
+      .split('')
+      .reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) & a, 0);
+    return colors[Math.abs(hash) % colors.length];
+  };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        setDragging(true);
-        pan.setOffset({ x: pan.x._value, y: pan.y._value });
-        pan.setValue({ x: 0, y: 0 });
-      },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false }
-      ),
-      onPanResponderRelease: (_, gestureState) => {
-        setDragging(false);
-        let scrollPosition = 0;
-        try {
-          const scrollResponder = sectionListRef.current?.getScrollResponder();
-          if (scrollResponder) {
-            const scrollableNode = scrollResponder.getScrollableNode();
-            if (scrollableNode) {
-              scrollPosition = scrollableNode.scrollTop || 0;
-            }
-          }
-        } catch (error) {
-          console.log('Error getting scroll position:', error);
-        }
-
-        taskRef.current.measure((x, y, width, height, pageX, pageY) => {
-          const dropY = gestureState.moveY + scrollPosition;
-
-
-          let assignedTeam = null;
-          const currentRanges = teamRangesRef.current;
-          if (Object.keys(currentRanges).length > 0) {
-            Object.entries(currentRanges).forEach(([teamId, range]) => {
-
-              if (dropY >= range.start && dropY <= range.end) {
-                assignedTeam = teamId;
-
-              }
-            });
-          }
-          if (assignedTeam) {
-
-            assignTaskToTeam(task.id, assignedTeam);
-          }
-        });
-
-        Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false }).start();
-      }
-    })
-  ).current;
+  const managerId = team.manager?._id || team.manager?.id || 'unknown';
+  const managerName = team.manager?.fullname || team.manager?.name || 'Unknown Manager';
+  const managerInitials = getInitials(managerName);
+  const avatarColor = getAvatarColor(managerId);
 
   return (
-    <View style={styles.taskWrapper}>
-      <Animated.View
-        ref={taskRef}
-        style={[
-          styles.taskCard,
-          getPriorityStyle(task.priority),
-          dragging && styles.draggedTask,
-          pan.getLayout(),
-          { width: '100%' }
-        ]}
-        {...panResponder.panHandlers}
-      >
-        <Text style={[styles.taskTitle, { color: theme.buttonText, width: '100%' }]}>
-          {task.title}
-        </Text>
-      </Animated.View>
-    </View>
+    <Card style={styles.teamCard} elevation={4}>
+      <Card.Content>
+        <View style={styles.teamHeader}>
+          <View style={styles.teamTitleSection}>
+            <Text style={styles.teamName}>{team.name}</Text>
+            <Chip mode="outlined" style={styles.memberChip}>
+              {team.members?.length || 0} members
+            </Chip>
+          </View>
+          <View style={styles.teamActions}>
+            <TouchableOpacity onPress={() => onEditTeam(team)} style={styles.actionIcon}>
+              <Icon name="pencil" size={20} color={paperTheme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onDeleteTeam(team)} style={styles.actionIcon}>
+              <Icon name="delete" size={20} color={paperTheme.colors.error} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.managerSection}>
+          <Text style={styles.sectionHeading}>Manager</Text>
+          <View style={styles.managerInfo}>
+            <Avatar.Text
+              size={48}
+              label={managerInitials}
+              style={[styles.managerAvatar, { backgroundColor: avatarColor }]}
+              labelStyle={styles.managerAvatarLabel}
+            />
+            <View style={styles.managerDetails}>
+              <Text style={styles.managerName}>{managerName}</Text>
+              <Text style={styles.managerEmail}>
+                {team.manager?.email || 'No email provided'}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </Card.Content>
+    </Card>
   );
 };
 
-const AdminScreen = () => {
+const TaskCard = ({ task, teams, onAssignTask }) => {
+  const paperTheme = usePaperTheme();
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  const formatDueDate = (dateString) => {
+    if (!dateString) return 'No due date';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const openMenu = () => setMenuVisible(true);
+  const closeMenu = () => setMenuVisible(false);
+
+  return (
+    <Surface style={styles.taskSurface} elevation={3}>
+      <Card style={styles.taskCard} mode="outlined">
+        <Card.Content>
+          <Text style={styles.taskTitle}>{task.title}</Text>
+          <Text style={styles.taskDescription} numberOfLines={2}>
+            {task.description || 'No description provided'}
+          </Text>
+          <View style={styles.taskFooter}>
+            <Icon name="calendar-clock" size={18} color={paperTheme.colors.accent} />
+            <Text style={styles.taskDueDate}>
+              {formatDueDate(task.dueDate)}
+            </Text>
+          </View>
+          <View style={styles.dropdownContainer}>
+            <Menu
+              visible={menuVisible}
+              onDismiss={closeMenu}
+              anchor={
+                <Button mode="contained" onPress={openMenu} style={styles.dropdownButton}>
+                  Assign to Team
+                </Button>
+              }
+            >
+              {teams.map((team) => (
+                <Menu.Item
+                  key={team._id || team.id}
+                  title={team.name}
+                  onPress={() => {
+                    onAssignTask(task, team);
+                    closeMenu();
+                  }}
+                />
+              ))}
+            </Menu>
+          </View>
+        </Card.Content>
+      </Card>
+    </Surface>
+  );
+};
+
+const AdminMainScreen = ({ navigation }) => {
   const { theme } = useTheme();
-  const [tasks, setTasks] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [teamRanges, setTeamRanges] = useState({});
-  const teamLayoutsRef = useRef({});
-  const sectionListRef = useRef(null);
-  const teamRefs = useRef({});
+  const paperTheme = usePaperTheme();
   const { addNotification } = useNotification();
+
+  const [currentUser, setCurrentUser] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [availableManagers, setAvailableManagers] = useState([]);
+  const [availableMembers, setAvailableMembers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingTeamId, setEditingTeamId] = useState(null);
+  const [teamName, setTeamName] = useState('');
+  const [selectedManager, setSelectedManager] = useState(null);
+  const [selectedMembers, setSelectedMembers] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+        if (user?.role !== 'admin') {
+          addNotification({
+            title: 'Access Denied',
+            message: 'You do not have admin privileges.',
+          });
+          navigation.replace('Tasks');
+        }
+      } catch (error) {
+        addNotification({
+          title: 'Authentication Error',
+          message: 'Failed to verify user credentials.',
+        });
+      }
+    })();
+  }, [addNotification, navigation]);
+
+  useEffect(() => {
+    fetchTeams();
+    fetchUsers();
+  }, []);
+
+  const fetchTeams = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await axiosInstance.get('/teams');
+      setTeams(response.data);
+    } catch (error) {
+      addNotification({
+        title: 'Data Error',
+        message: 'Failed to load teams.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addNotification]);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await axiosInstance.get('/users/alluser');
+      const users = response.data.allUsers;
+      const managers = users.filter((user) => user.role === 'manager');
+      const members = users.filter((user) => user.role === 'user');
+      setAvailableManagers(managers);
+      setAvailableMembers(members);
+    } catch (error) {
+      addNotification({
+        title: 'Data Error',
+        message: 'Failed to load users.',
+      });
+    }
+  }, [addNotification]);
+
+  const openCreateModal = () => {
+    setIsEditMode(false);
+    setEditingTeamId(null);
+    setTeamName('');
+    setSelectedManager(null);
+    setSelectedMembers([]);
+    setModalVisible(true);
+  };
+
+  const handleEditTeam = (team) => {
+    setIsEditMode(true);
+    setEditingTeamId(team._id || team.id);
+    setTeamName(team.name);
+    const manager = availableManagers.find(
+      (m) => (m._id || m.id) === (team.manager?._id || team.manager?.id)
+    ) || null;
+    setSelectedManager(manager);
+    const members = availableMembers.filter((m) =>
+      team.members?.some((tm) => (tm._id || tm.id) === (m._id || m.id))
+    );
+    setSelectedMembers(members);
+    setModalVisible(true);
+  };
+
+  const handleDeleteTeam = (team) => {
+    Alert.alert('Delete Team', `Are you sure you want to delete "${team.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => deleteTeam(team),
+      },
+    ]);
+  };
+
+  const deleteTeam = async (team) => {
+    try {
+      console.log('Deleting team:', team);
+      await axiosInstance.delete(`/teams/${team._id || team.id}`);
+      addNotification({
+        title: 'Success',
+        message: `Team "${team.name}" deleted successfully.`,
+      });
+      fetchTeams();
+    } catch (error) {
+      console.error('Delete team error:', error);
+      addNotification({
+        title: 'Error',
+        message: 'Failed to delete team.',
+      });
+    }
+  };
+
+  const handleSaveTeam = async () => {
+    if (!teamName.trim()) {
+      addNotification({
+        title: 'Validation Error',
+        message: 'Team name is required.',
+      });
+      return;
+    }
+    if (!selectedManager) {
+      addNotification({
+        title: 'Validation Error',
+        message: 'Please select a manager.',
+      });
+      return;
+    }
+    setIsSubmitting(true);
+
+    const teamData = {
+      name: teamName.trim(),
+      managerId: selectedManager._id || selectedManager.id,
+      memberIds: selectedMembers.map((member) => member._id || member.id),
+    };
+
+    console.log('Saving team payload:', teamData);
+
+    try {
+      if (isEditMode) {
+        await axiosInstance.put(`/teams/${editingTeamId}`, teamData);
+        addNotification({ title: 'Success', message: 'Team updated successfully.' });
+      } else {
+        await axiosInstance.post('/teams/post', teamData);
+        addNotification({ title: 'Success', message: 'Team created successfully.' });
+      }
+      fetchTeams();
+      closeModal();
+    } catch (error) {
+      console.error('Team save error:', error);
+      addNotification({
+        title: 'Error',
+        message: 'Failed to save team. Please check the logs for details.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    setTeamName('');
+    setSelectedManager(null);
+    setSelectedMembers([]);
+    setIsEditMode(false);
+    setEditingTeamId(null);
+  };
+
+  const toggleMemberSelection = (member) => {
+    if (selectedMembers.some((m) => (m._id || m.id) === (member._id || member.id))) {
+      setSelectedMembers(selectedMembers.filter((m) => (m._id || m.id) !== (member._id || member.id)));
+    } else {
+      setSelectedMembers([...selectedMembers, member]);
+    }
+  };
+
+  const isMemberSelected = (member) => {
+    return selectedMembers.some((m) => (m._id || m.id) === (member._id || member.id));
+  };
+
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <StatusBar
+        backgroundColor={theme.background}
+        barStyle={theme.text === '#ffffff' ? 'light-content' : 'dark-content'}
+      />
+      <View style={styles.adminHeader}>
+        <Text style={styles.adminHeaderTitle}>Admin Dashboard</Text>
+      </View>
+      <View style={styles.buttonRow}>
+        <Button
+          mode="contained"
+          icon="clipboard-text"
+          onPress={() => navigation.navigate('Tasks')}
+          style={styles.navButton}
+        >
+          View Tasks
+        </Button>
+        <Button
+          mode="contained"
+          icon="plus"
+          onPress={openCreateModal}
+          style={styles.navButton}
+        >
+          Add Team
+        </Button>
+      </View>
+      <ScrollView contentContainerStyle={styles.container}>
+        {isLoading ? (
+          <Card style={styles.loadingCard}>
+            <Card.Content>
+              <Text>Loading teams...</Text>
+            </Card.Content>
+          </Card>
+        ) : teams.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Card.Content>
+              <Text>No teams available</Text>
+            </Card.Content>
+          </Card>
+        ) : (
+          teams.map((team) => (
+            <TeamCard
+              key={team._id || team.id}
+              team={team}
+              onEditTeam={handleEditTeam}
+              onDeleteTeam={handleDeleteTeam}
+            />
+          ))
+        )}
+      </ScrollView>
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={closeModal}>
+        <View style={styles.modalOverlay}>
+          <Card style={styles.modalCard}>
+            <Card.Title title={isEditMode ? 'Edit Team' : 'Create Team'} />
+            <Card.Content>
+              <TextInput
+                style={styles.input}
+                value={teamName}
+                onChangeText={setTeamName}
+                placeholder="Team Name"
+                placeholderTextColor="#9e9e9e"
+              />
+              <Text style={styles.modalLabel}>Select Manager</Text>
+              <ScrollView style={styles.userList}>
+                {availableManagers.length === 0 ? (
+                  <Text>No managers available</Text>
+                ) : (
+                  availableManagers.map((manager) => (
+                    <TouchableOpacity
+                      key={manager._id || manager.id}
+                      onPress={() => setSelectedManager(manager)}
+                      style={[
+                        styles.userItem,
+                        selectedManager &&
+                          (selectedManager._id || selectedManager.id) === (manager._id || manager.id) &&
+                          styles.selectedUser,
+                      ]}
+                    >
+                      <Text>{manager.fullname || manager.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+              <Text style={styles.modalLabel}>Select Members</Text>
+              <ScrollView style={styles.userList}>
+                {availableMembers.length === 0 ? (
+                  <Text>No members available</Text>
+                ) : (
+                  availableMembers.map((member) => (
+                    <TouchableOpacity
+                      key={member._id || member.id}
+                      onPress={() => toggleMemberSelection(member)}
+                      style={[
+                        styles.userItem,
+                        isMemberSelected(member) && styles.selectedUser,
+                      ]}
+                    >
+                      <Text>{member.fullname || member.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </ScrollView>
+            </Card.Content>
+            <Card.Actions style={styles.modalActions}>
+              <Button mode="outlined" onPress={closeModal} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button mode="contained" onPress={handleSaveTeam} loading={isSubmitting} disabled={isSubmitting}>
+                {isEditMode ? 'Update' : 'Create'}
+              </Button>
+            </Card.Actions>
+          </Card>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const TasksScreen = ({ navigation }) => {
+  const { theme } = useTheme();
+  const { addNotification } = useNotification();
+  const [tasks, setTasks] = useState([]);
+  const [teams, setTeams] = useState([]); 
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchTasks();
     fetchTeams();
   }, []);
 
-  useEffect(() => {
-    if (teams.length > 0) {
-      setTimeout(updateTeamRanges, 100);
-    }
-  }, [teams]);
-
-  const calculateTeamRanges = (layouts) => {
-    const ranges = {};
-    const PADDING = 20;
-    const sortedTeams = Object.entries(layouts).sort((a, b) => a[1].pageY - b[1].pageY);
-    sortedTeams.forEach(([teamId, layout]) => {
-      const absoluteY = layout.pageY;
-      ranges[teamId] = {
-        start: absoluteY - PADDING,
-        end: absoluteY + layout.height + PADDING,
-        pageY: absoluteY,
-        height: layout.height,
-        center: absoluteY + (layout.height / 2)
-      };
-    });
-
-    return ranges;
-  };
-
-  const updateTeamRanges = () => {
-    Object.entries(teamRefs.current).forEach(([teamId, ref]) => {
-      if (ref) {
-        ref.measure((x, y, width, height, pageX, pageY) => {
-
-          teamLayoutsRef.current = {
-            ...teamLayoutsRef.current,
-            [teamId]: { width, height, pageX, pageY, absoluteY: pageY }
-          };
-          const ranges = calculateTeamRanges(teamLayoutsRef.current);
-          setTeamRanges(ranges);
-
-        });
-      }
-    });
-  };
-
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
-      const response = await fetch(TASKS_API);
-      const data = await response.json();
-      const unassignedTasks = data.filter(task => !task.assignedTo);
-      setTasks(unassignedTasks);
-      setTimeout(updateTeamRanges, 100);
+      setIsLoading(true);
+      const taskResponse = await axiosInstance.get('/tasks');
+      const currentUser = await getCurrentUser();
+      const userId = currentUser.id || currentUser._id;
+      const filteredTasks = taskResponse.data.filter(
+        (task) => !task.assignedTo || task.assignedTo === userId
+      );
+      setTasks(filteredTasks);
     } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const fetchTeams = async () => {
-    try {
-      const response = await fetch(TEAMS_API);
-      const data = await response.json();
-      setTeams(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const assignTaskToTeam = async (taskId, teamId) => {
-    try {
-
-      const response = await fetch(`${TASKS_API}/${taskId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assignedTo: teamId })
-      });
-
-      if (!response.ok) throw new Error('Failed to assign task');
-      const updatedTask = await response.json();
-
-
-      const assignedTeam = teams.find(team => team.id === teamId);
-
-
       addNotification({
-        title: 'Task Assigned to Team',
-        message: `Task "${updatedTask.title}" has been assigned to team ${assignedTeam.name} (${teamId}) by Admin`,
+        title: 'Error',
+        message: 'Failed to load tasks.',
       });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addNotification]);
 
+  const fetchTeams = useCallback(async () => {
+    try {
+      const teamResponse = await axiosInstance.get('/teams');
+      setTeams(teamResponse.data);
+    } catch (error) {
+      addNotification({
+        title: 'Error',
+        message: 'Failed to load teams for assignment.',
+      });
+    }
+  }, [addNotification]);
 
-      await fetchTasks();
-      setTimeout(updateTeamRanges, 100);
+  const handleAssignTask = async (task, team) => {
+    try {
+      // Get the team manager's id
+      const managerId = team.manager?._id || team.manager?.id;
+      if (!managerId) {
+        addNotification({
+          title: 'Assignment Error',
+          message: 'Selected team does not have a valid manager.',
+        });
+        return;
+      }
+  
+      const updatedTask = { ...task, assignedTo: managerId };
+      await axiosInstance.put(`/tasks/${task._id || task.id}`, updatedTask);
+  
+      const adminUser = await getCurrentUser();
+  
+      await axiosInstance.post('/notifications', {
+        type: 'task_assigned',
+        title: 'Task Assigned',
+        message: `Admin has assigned you a new task: "${task.title}""`,
+        recipient: managerId,
+        sender: adminUser._id || adminUser.id,
+      });
+      addNotification({
+        title: 'Success',
+        message: `Task assigned to ${team.name} manager.`,
+      });
+  
+      setTasks(tasks.filter(t => (t._id || t.id) !== (task._id || task.id)));
     } catch (error) {
       console.error('Error assigning task:', error);
+      addNotification({
+        title: 'Assignment Failed',
+        message: error.response?.data?.message || 'There was a problem assigning the task.',
+      });
     }
   };
-
-  const renderTaskItem = ({ item }) => {
-
-    return (
-      <DraggableTask
-        task={item}
-        teamRanges={teamRanges}
-        assignTaskToTeam={assignTaskToTeam}
-        sectionListRef={sectionListRef}
-      />
-    );
-  };
-
-  const renderTeamItem = ({ item }) => (
-    <View
-      key={item.id}
-      ref={ref => teamRefs.current[item.id] = ref}
-      style={[styles.teamCard, {
-        backgroundColor: theme.cardBackground,
-        shadowColor: theme.shadowColor,
-      }]}
-      onLayout={(event) => {
-        const { layout } = event.nativeEvent;
-
-        teamLayoutsRef.current = {
-          ...teamLayoutsRef.current,
-          [item.id]: { width: layout.width, height: layout.height, pageX: layout.x, pageY: layout.y }
-        };
-        const ranges = calculateTeamRanges(teamLayoutsRef.current);
-        setTeamRanges(ranges);
-
-      }}
-    >
-      <Text style={[styles.teamName, { color: theme.text }]}>{item.name}</Text>
-      <Text style={[styles.managerName, { color: theme.textSecondary }]}>
-        Manager: {item.manager.name}
-      </Text>
-      <Text style={[styles.managerEmail, { color: theme.textSecondary }]}>
-        {item.manager.email}
-      </Text>
-    </View>
-  );
-
-  const renderSectionHeader = ({ section: { title } }) => (
-    <View>
-      <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>
-    </View>
-  );
+  
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }]}>
-      <StatusBar backgroundColor={theme.background} barStyle={theme.text === '#ffffff' ? "light-content" : "dark-content"} />
-      <Text style={[styles.heading, { color: theme.text }]}>Admin Board</Text>
-      <View style={[styles.adminInfo, {
-        backgroundColor: theme.cardBackground,
-        borderLeftWidth: 4,
-        borderLeftColor: theme.primary,
-      }]}>
-        <Text style={[styles.adminName, { color: theme.text }]}>
-          {ADMIN_INFO.name}
-        </Text>
-        <Text style={[styles.adminEmail, { color: theme.textSecondary }]}>
-          {ADMIN_INFO.email}
-        </Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <View style={styles.taskHeader}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="arrow-left" size={26} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.tasksHeading}>My Tasks</Text>
       </View>
-      <View style={styles.mainContainer}>
-        <View style={styles.tasksContainer}>
-          <SectionList
-            ref={sectionListRef}
-            sections={[{ title: "Unassigned Tasks", data: tasks }]}
-            keyExtractor={(item, index) => item.id ? item.id : index.toString()}
-            renderItem={renderTaskItem}
-            renderSectionHeader={renderSectionHeader}
-            contentContainerStyle={styles.sectionListContent}
-          />
-        </View>
-        <View style={styles.teamsContainer}>
-          <SectionList
-            sections={[{ title: "Teams", data: teams }]}
-            keyExtractor={(item, index) => item.id ? item.id : index.toString()}
-            renderItem={renderTeamItem}
-            renderSectionHeader={renderSectionHeader}
-            contentContainerStyle={styles.sectionListContent}
-          />
-        </View>
-      </View>
+      <ScrollView contentContainerStyle={styles.container}>
+        {isLoading ? (
+          <Card style={styles.loadingCard}>
+            <Card.Content>
+              <Text>Loading tasks...</Text>
+            </Card.Content>
+          </Card>
+        ) : tasks.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Card.Content>
+              <Text>No tasks available</Text>
+            </Card.Content>
+          </Card>
+        ) : (
+          tasks.map((task) => (
+            <TaskCard key={task._id || task.id} task={task} teams={teams} onAssignTask={handleAssignTask} />
+          ))
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 };
 
-const getPriorityStyle = (priority) => {
-  const { theme, isDarkMode } = useTheme();
-
-  const priorityColors = {
-    light: {
-      High: "#ff4d4d",
-      Medium: "#ffcc00",
-      Low: "#28a745",
-    },
-    dark: {
-      High: "#8B0000", // darker red
-      Medium: "#B8860B", // darker yellow
-      Low: "#006400", // darker green
-    }
-  };
-
-  const colors = isDarkMode ? priorityColors.dark : priorityColors.light;
-
-  switch (priority) {
-    case "High":
-      return { backgroundColor: colors.High };
-    case "Medium":
-      return { backgroundColor: colors.Medium };
-    case "Low":
-      return { backgroundColor: colors.Low };
-    default:
-      return { backgroundColor: theme.cardBackground };
-  }
+const AdminScreen = () => {
+  return (
+    <Stack.Navigator initialRouteName="AdminMain" screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="AdminMain" component={AdminMainScreen} />
+      <Stack.Screen name="Tasks" component={TasksScreen} />
+    </Stack.Navigator>
+  );
 };
+
+export default AdminScreen;
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    marginTop: 10,
-    paddingHorizontal: 20,
   },
-  heading: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginVertical: 15,
-    textAlign: 'center'
+  adminHeader: {
+    // backgroundColor: '#6200EE',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
   },
-  sectionListContent: {
-    padding: 10,
-    paddingHorizontal: 0,
-  },
-  sectionTitle: {
+  adminHeaderTitle: {
+    // color: '#fff',
     fontSize: 24,
-    fontWeight: "bold",
-    marginVertical: 10,
+    fontWeight: 'bold',
   },
-  mainContainer: {
+  taskHeader: {
+    marginTop:20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'skyblue',
+    paddingVertical: 5,
+    paddingHorizontal: 16,
+    borderRadius:18,
+    marginHorizontal:15
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  tasksHeading: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#fff',
     flex: 1,
-    backgroundColor: 'transparent',
-    width: '100%',
-    marginTop: 10,
+    textAlign: 'center',
   },
-  tasksContainer: {
-    height: '30%',
-    maxHeight: '30%',
-    overflow: 'visible',
-    backgroundColor: 'transparent',
-    position: 'relative',
-    zIndex: 2,
-    width: '100%',
-    marginBottom: 20,
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  teamsContainer: {
+  navButton: {
     flex: 1,
-    backgroundColor: 'transparent',
-    position: 'relative',
-    zIndex: 1,
-    width: '100%'
+    marginHorizontal: 4,
   },
-  taskWrapper: {
-    position: 'relative',
-    width: '100%'
-  },
-  taskCard: {
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 8,
-    elevation: 3,
-    backgroundColor: "black",
-    position: 'relative',
-    zIndex: 1,
-    width: '100%',
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#fff",
-    width: '100%'
+  container: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   teamCard: {
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 8,
-    elevation: 3,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    marginVertical: 8,
+    borderRadius: 12,
+  },
+  teamHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  teamTitleSection: {
+    flex: 1,
   },
   teamName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
   },
-  managerName: {
+  memberChip: {
+    marginTop: 4,
+    backgroundColor: '#F1F1F1',
+  },
+  teamActions: {
+    flexDirection: 'row',
+  },
+  actionIcon: {
+    marginLeft: 12,
+  },
+  managerSection: {
+    marginTop: 16,
+  },
+  sectionHeading: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 8,
+  },
+  managerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  managerAvatar: {
+    marginRight: 12,
+  },
+  managerAvatarLabel: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  managerDetails: {},
+  managerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
   },
   managerEmail: {
     fontSize: 14,
+    color: '#777',
   },
-  draggedTask: {
-    position: 'absolute',
-    zIndex: 9999,
-    elevation: 9999,
-    width: '100%',
-    backgroundColor: 'black',
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    top: 0,
-    left: 0
+  loadingCard: {
+    marginVertical: 8,
   },
-
-  adminInfo: {
-    padding: 15,
+  emptyCard: {
+    marginVertical: 8,
+  },
+  taskSurface: {
     borderRadius: 10,
-    marginBottom: 20,
-    position: 'relative',
-    zIndex: 1,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    marginVertical: 8,
+    overflow: 'hidden',
   },
-  adminName: {
+  taskCard: {
+    borderRadius: 10,
+    backgroundColor: '#fff',
+  },
+  taskTitle: {
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
   },
-  adminEmail: {
+  taskDescription: {
+    fontSize: 16,
+    color: '#555',
+    marginBottom: 8,
+  },
+  taskFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  taskDueDate: {
+    fontSize: 16,
+    color: '#6200EE',
+    marginLeft: 6,
+  },
+  dropdownContainer: {
+    marginTop: 12,
+  },
+  dropdownButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#6200EE',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: '#00000066',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    padding: 16,
+    borderRadius: 12,
+  },
+  input: {
+    borderBottomWidth: 1,
+    borderColor: '#ccc',
+    marginBottom: 12,
+    paddingVertical: 6,
+    color: '#000',
     fontSize: 16,
   },
+  modalLabel: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+    fontSize: 16,
+    color: '#333',
+  },
+  userList: {
+    maxHeight: 120,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 6,
+    borderRadius: 8,
+  },
+  userItem: {
+    padding: 8,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+  },
+  selectedUser: {
+    backgroundColor: '#E0E0E0',
+  },
+  modalActions: {
+    justifyContent: 'flex-end',
+  },
 });
-
-export default AdminScreen;

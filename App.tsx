@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
@@ -6,10 +7,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { NotificationProvider } from './src/utils/NotificationContext';
 import { ThemeProvider, useTheme } from './src/utils/ThemeContext';
+import { Provider as PaperProvider, DefaultTheme } from 'react-native-paper';
 
 import LoginScreen from './src/pages/LoginScreen';
 import SignupScreen from './src/pages/SignupScreen';
 import ForgotPasswordScreen from './src/pages/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/pages/ResetPasswordScreen';
 import Dashboardscreen from './src/pages/Dashboardscreen';
 import TaskScreen from './src/pages/TaskScreen';
 import KanbanBoardScreen from './src/pages/KanbanBoardScreen';
@@ -20,12 +23,12 @@ import AccountScreen from './src/pages/AccountScreen';
 import AdminScreen from './src/pages/AdminScreen';
 import ManagerScreen from './src/pages/ManagerScreen';
 import CalendarScreen from './src/pages/CalendarScreen';
+import LoadingScreen from './src/pages/LoadingScreen';
+import UserScreen from './src/pages/UserScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 const AccountStack = createNativeStackNavigator();
-
-const TOKEN_KEY = '@auth_token';
 
 const AccountStackNavigator = () => (
   <AccountStack.Navigator screenOptions={{ headerShown: false }}>
@@ -38,12 +41,30 @@ const AccountStackNavigator = () => (
 
 const DashboardTabs = () => {
   const { theme } = useTheme();
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    const getUserData = async () => {
+      try {
+        const userDataStr = await AsyncStorage.getItem('@user_data');
+        if (userDataStr) {
+          const userData = JSON.parse(userDataStr);
+          setUserRole(userData.role);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    getUserData();
+  }, []);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
+        unmountOnBlur: true,
         tabBarStyle: {
           backgroundColor: theme.cardBackground,
           height: 60,
@@ -51,7 +72,7 @@ const DashboardTabs = () => {
           borderTopColor: theme.border,
         },
         tabBarIcon: ({ size }) => {
-          let iconName;
+          let iconName = '';
           let iconColor = theme.text;
 
           if (route.name === 'Dashboard') {
@@ -63,6 +84,9 @@ const DashboardTabs = () => {
           } else if (route.name === 'KanbanBoard') {
             iconName = 'trello';
             iconColor = '#ff9800';
+          } else if (route.name === 'user') {
+            iconName = 'account-group';
+            iconColor = '#e91e63';
           } else if (route.name === 'Admin') {
             iconName = 'shield-account';
             iconColor = '#1991d3';
@@ -74,50 +98,66 @@ const DashboardTabs = () => {
             iconColor = '#e91e63';
           }
 
-          return <Icon name={iconName ?? ''} size={size} color={iconColor} />;
+          return <Icon name={iconName} size={size} color={iconColor} />;
         },
       })}
     >
       <Tab.Screen name="Dashboard" component={Dashboardscreen} />
       <Tab.Screen name="Tasks" component={TaskScreen} />
       <Tab.Screen name="KanbanBoard" component={KanbanBoardScreen} />
-      <Tab.Screen name="Admin" component={AdminScreen} />
-      <Tab.Screen name="Manager" component={ManagerScreen} />
+      <Tab.Screen name="user" component={UserScreen} />
+      
+      {userRole === 'admin' && (
+        <Tab.Screen name="Admin" component={AdminScreen} />
+      )}
+
+      {userRole === 'manager' && (
+        <Tab.Screen name="Manager" component={ManagerScreen} />
+      )}
+
       <Tab.Screen name="Account" component={AccountStackNavigator} />
     </Tab.Navigator>
   );
 };
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
-      setIsAuthenticated(Boolean(token));
-    };
-    checkAuth();
-  }, []);
-
-  if (isAuthenticated === null) return null;
+  const theme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: '#007bff',
+      secondary: '#6c757d',
+    },
+  };
 
   return (
-    <ThemeProvider>
-      <NotificationProvider>
-        <NavigationContainer>
-          <Stack.Navigator
-            screenOptions={{ headerShown: false }}
-            initialRouteName={isAuthenticated ? "DashboardTabs" : "Login"}
-          >
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-            <Stack.Screen name="DashboardTabs" component={DashboardTabs} />
-            <Stack.Screen name="Calendar" component={CalendarScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </NotificationProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <PaperProvider theme={theme}>
+        <ThemeProvider>
+          <NotificationProvider>
+            <NavigationContainer>
+              <Stack.Navigator
+                screenOptions={{ headerShown: false }}
+                initialRouteName="Loading">
+                <Stack.Screen name="Loading" component={LoadingScreen} />
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Signup" component={SignupScreen} />
+                <Stack.Screen
+                  name="ForgotPassword"
+                  component={ForgotPasswordScreen}
+                />
+                <Stack.Screen
+                  name="ResetPassword"
+                  component={ResetPasswordScreen}
+                />
+                <Stack.Screen name="DashboardTabs" component={DashboardTabs} />
+                <Stack.Screen name="Calendar" component={CalendarScreen} />
+              </Stack.Navigator>
+            </NavigationContainer>
+          </NotificationProvider>
+        </ThemeProvider>
+      </PaperProvider>
+    </GestureHandlerRootView>
   );
 };
 

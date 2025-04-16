@@ -1,20 +1,27 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Image, Alert } from 'react-native';
 import { useTheme } from '../utils/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import axios from 'axios';
-
-const API_URL = 'https://67dd0778e00db03c4069dbf8.mockapi.io/users';
+import { forgotPassword } from '../utils/authService';
 
 const ForgotPasswordScreen = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [password, setPassword] = useState('');
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [countdown, setCountdown] = useState(0);
   const { theme } = useTheme();
   const navigation = useNavigation();
 
-  const getPassword = async () => {
+  useEffect(() => {
+    let timer;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
+
+  const handleResetPassword = async () => {
     if (!email) {
       setError('Please enter your email address');
       return;
@@ -29,20 +36,24 @@ const ForgotPasswordScreen = () => {
     try {
       setLoading(true);
       setError('');
-      setPassword('');
+      setSuccess(false);
 
-      const response = await axios.get(API_URL);
-      const users = response.data;
+      const response = await forgotPassword(email);
 
-      const user = users.find((user) => user.email.toLowerCase() === email.toLowerCase());
-
-      if (!user) {
-        setError('Email does not exist');
+      if (response.exists) {
+        setSuccess(true);
+        setCountdown(30);
+        Alert.alert(
+          'Success',
+          'Password reset link has been sent to your email. Please check your inbox.',
+          [{ text: 'OK' }]
+        );
       } else {
-        setPassword(user.password);
+        setError('Email not found in our records');
       }
     } catch (error) {
-      setError('An error occurred. Please try again later.');
+      console.error('Password reset error:', error);
+      setError(error.message || 'An error occurred. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -54,6 +65,10 @@ const ForgotPasswordScreen = () => {
       <View style={[styles.formContainer, { backgroundColor: theme.background }]}>
         <Text style={[styles.title, { color: theme.text }]}>Forgot Password</Text>
 
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+          Enter your email address and we'll send you a link to reset your password.
+        </Text>
+
         <TextInput
           style={[styles.input, { backgroundColor: theme.inputBackground, borderColor: theme.border, color: theme.text }]}
           placeholder="Email"
@@ -62,30 +77,42 @@ const ForgotPasswordScreen = () => {
           onChangeText={(text) => {
             setEmail(text);
             setError('');
-            setPassword('');
           }}
           keyboardType="email-address"
           autoCapitalize="none"
         />
 
         {error ? <Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text> : null}
+        {success && (
+          <Text style={[styles.successText, { color: theme.success }]}>
+            Reset link sent! Check your email.
+          </Text>
+        )}
 
         <TouchableOpacity
-          style={[styles.button, { backgroundColor: theme.primary, shadowColor: theme.shadowColor }]}
-          onPress={getPassword}
-          disabled={loading}
+          style={[
+            styles.button,
+            {
+              backgroundColor: countdown > 0 ? theme.disabled : theme.primary,
+              shadowColor: theme.shadowColor
+            }
+          ]}
+          onPress={handleResetPassword}
+          disabled={loading || countdown > 0}
         >
-          {loading ? <ActivityIndicator color={theme.buttonText} /> : <Text style={[styles.buttonText, { color: theme.buttonText }]}>Get Password</Text>}
+          {loading ? (
+            <ActivityIndicator color={theme.buttonText} />
+          ) : (
+            <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+              {countdown > 0 ? `Resend in ${countdown}s` : 'Send Reset Link'}
+            </Text>
+          )}
         </TouchableOpacity>
 
-        {password ? (
-          <View style={[styles.passwordContainer, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-            <Text style={[styles.passwordLabel, { color: theme.textSecondary }]}>Your password is:</Text>
-            <Text style={[styles.passwordText, { color: theme.text }]}>{password}</Text>
-          </View>
-        ) : null}
-
-        <TouchableOpacity style={styles.backLink} onPress={() => navigation.navigate('Login')}>
+        <TouchableOpacity
+          style={styles.backLink}
+          onPress={() => navigation.navigate('Login')}
+        >
           <Text style={[styles.link, { color: theme.primary }]}>Back to Login</Text>
         </TouchableOpacity>
       </View>
@@ -94,7 +121,6 @@ const ForgotPasswordScreen = () => {
 };
 
 export default ForgotPasswordScreen;
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -113,7 +139,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  subtitle: {
+    textAlign: 'center',
     marginBottom: 20,
+    fontSize: 14,
+    paddingHorizontal: 20,
   },
   input: {
     width: 300,
@@ -147,21 +179,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginLeft: 5,
   },
-  passwordContainer: {
-    width: 300,
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  passwordLabel: {
+  successText: {
+    marginTop: 10,
     fontSize: 14,
-    marginBottom: 5,
-  },
-  passwordText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    textAlign: 'center',
   },
   backLink: {
     marginTop: 25,
@@ -170,3 +191,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+

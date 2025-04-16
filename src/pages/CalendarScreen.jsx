@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/ThemeContext';
-import axios from 'axios';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Svg, { Path } from 'react-native-svg';
-
-const API_URL = "https://67dd0778e00db03c4069dbf8.mockapi.io/tasks";
 
 const BackArrowIcon = ({ onPress, color }) => (
   <TouchableOpacity onPress={onPress} style={styles.backButton}>
@@ -18,23 +15,17 @@ const BackArrowIcon = ({ onPress, color }) => (
 
 const CalendarScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const { theme } = useTheme();
   const [tasks, setTasks] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
-
-  const fetchTasks = async () => {
-    try {
-      const response = await axios.get(API_URL);
-      setTasks(response.data);
-    } catch (error) {
-      console.error("Error fetching tasks:", error);
+    if (route.params?.tasks) {
+      setTasks(route.params.tasks);
     }
-  };
+  }, [route.params?.tasks]);
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -50,6 +41,7 @@ const CalendarScreen = () => {
 
   const hasTasksOnDate = (date) => {
     return tasks.some(task => {
+      if (!task.createdAt) return false;
       const taskDate = new Date(task.createdAt);
       return taskDate.toDateString() === date.toDateString();
     });
@@ -57,6 +49,7 @@ const CalendarScreen = () => {
 
   const getTasksForDate = (date) => {
     return tasks.filter(task => {
+      if (!task.createdAt) return false;
       const taskDate = new Date(task.createdAt);
       return taskDate.toDateString() === date.toDateString();
     });
@@ -109,6 +102,19 @@ const CalendarScreen = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + increment));
   };
 
+  const getPriorityColor = (priority) => {
+    switch (priority?.toLowerCase()) {
+      case "high":
+        return "#e74c3c";
+      case "medium":
+        return "#f39c12";
+      case "low":
+        return "#2ecc71";
+      default:
+        return "#95a5a6";
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <StatusBar backgroundColor={theme.background} barStyle={theme.statusBarStyle} />
@@ -156,21 +162,40 @@ const CalendarScreen = () => {
               </Text>
             </View>
             <ScrollView style={styles.tasksList}>
-              {getTasksForDate(selectedDate).map(task => (
-                <View key={task.id} style={[styles.taskItem, {
-                  backgroundColor: theme.cardBackground,
-                  borderColor: theme.border,
-                  shadowColor: theme.shadowColor,
-                }]}>
-                  <Text style={[styles.taskTitle, { color: theme.text }]}>{task.title}</Text>
-                  <Text style={[styles.taskPriority, {
-                    color: theme.textSecondary,
-                    backgroundColor: theme.inputBackground,
+              {getTasksForDate(selectedDate).length > 0 ? (
+                getTasksForDate(selectedDate).map(task => (
+                  <View key={task._id} style={[styles.taskItem, {
+                    backgroundColor: theme.cardBackground,
+                    borderColor: theme.border,
+                    shadowColor: theme.shadowColor,
                   }]}>
-                    Priority: {task.priority}
+                    <Text style={[styles.taskTitle, { color: theme.text }]}>{task.title}</Text>
+                    <View style={styles.taskInfo}>
+                      <View style={[styles.taskPriority, {
+                        backgroundColor: getPriorityColor(task.priority),
+                      }]}>
+                        <Text style={styles.priorityText}>{task.priority || "Normal"}</Text>
+                      </View>
+                      <Text style={[styles.taskStatus, { color: theme.textSecondary }]}>
+                        Status: {task.status}
+                      </Text>
+                    </View>
+                    {task.description && (
+                      <Text style={[styles.taskDescription, { color: theme.textSecondary }]}>
+                        {task.description.length > 50 
+                          ? task.description.substring(0, 50) + '...' 
+                          : task.description}
+                      </Text>
+                    )}
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyStateContainer}>
+                  <Text style={[styles.emptyStateText, { color: theme.textSecondary }]}>
+                    No tasks created on this date
                   </Text>
                 </View>
-              ))}
+              )}
             </ScrollView>
           </View>
         )}

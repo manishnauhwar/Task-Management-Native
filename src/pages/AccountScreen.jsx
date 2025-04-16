@@ -1,47 +1,44 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
-import React from 'react';
+import React, { useCallback } from 'react';
+import { Text, View, TouchableOpacity, ScrollView, StatusBar, Alert, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/ThemeContext';
 import { useNotification } from '../utils/NotificationContext';
 import { logout } from '../utils/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import firebase from '@react-native-firebase/app';
-
+import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
 
 const AccountScreen = ({ navigation }) => {
   const { theme } = useTheme();
   const { unreadCount } = useNotification();
+  const { t } = useTranslation();
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('AccountScreen is focused');
+    }, [])
+  );
 
   const handleLogout = async () => {
     Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
+      t('account.logoutAlertTitle'),
+      t('account.logoutAlertMessage'),
       [
+        { text: t('account.cancel'), style: 'cancel' },
         {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Logout",
-          style: "destructive",
+          text: t('account.logout'),
+          style: 'destructive',
           onPress: async () => {
             try {
-              await logout(); 
-              try {
-                await AsyncStorage.multiRemove(['@auth_token', '@user_data', '@refresh_token']);
-              } catch (storageError) {
-                console.error('AsyncStorage clear error:', storageError);
-              }
-
+              await logout();
+              await AsyncStorage.multiRemove(['@auth_token', '@user_data', '@refresh_token']);
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Login' }],
               });
             } catch (error) {
               console.error('Logout error:', error);
-
-              
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Login' }],
@@ -55,18 +52,15 @@ const AccountScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
-      <StatusBar
-        backgroundColor={theme.background}
-        barStyle={theme.statusBarStyle}
-      />
-      <Text style={[styles.heading, { color: theme.text }]}>Account</Text>
+      <StatusBar backgroundColor={theme.background} barStyle={theme.statusBarStyle} />
+      <Text style={[styles.heading, { color: theme.text }]}>{t('account.heading')}</Text>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <TouchableOpacity
           style={[styles.link, { borderBottomColor: theme.divider }]}
           onPress={() => navigation.navigate('Profile')}
         >
           <Icon name="account" size={24} color={theme.primary} />
-          <Text style={[styles.text, { color: theme.text }]}>Profile</Text>
+          <Text style={[styles.text, { color: theme.text }]}>{t('account.profile')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -81,7 +75,7 @@ const AccountScreen = ({ navigation }) => {
               </View>
             )}
           </View>
-          <Text style={[styles.text, { color: theme.text }]}>Notifications</Text>
+          <Text style={[styles.text, { color: theme.text }]}>{t('account.notifications')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -89,7 +83,7 @@ const AccountScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Settings')}
         >
           <Icon name="cog" size={24} color={theme.success} />
-          <Text style={[styles.text, { color: theme.text }]}>Settings</Text>
+          <Text style={[styles.text, { color: theme.text }]}>{t('account.settings')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -98,9 +92,7 @@ const AccountScreen = ({ navigation }) => {
         >
           <View style={styles.linkContent}>
             <Icon name="logout" size={24} color={theme.buttonText} />
-            <Text style={[styles.logoutText, { color: theme.buttonText }]}>
-              Logout
-            </Text>
+            <Text style={[styles.logoutText, { color: theme.buttonText }]}>{t('account.logout')}</Text>
           </View>
         </TouchableOpacity>
       </ScrollView>
