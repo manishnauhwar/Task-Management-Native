@@ -1,251 +1,196 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, Image, Alert } from 'react-native';
+import {
+  StyleSheet, Text, View, TouchableOpacity,
+  Modal, TextInput, Image, Alert
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as ImagePicker from 'react-native-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../../utils/axiosinstance';
+import { useTranslation } from 'react-i18next';
 
 const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
+  const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
-  const [profilePicture, setProfilePicture] = useState(user.profilePictureUrl || null);
+  const [profilePicture, setProfilePicture] = useState(user.profilePictureUrl);
   const [editData, setEditData] = useState({
-    fullname: user.fullname || '',
-    email: user.email || '',
-    password: ''
+    fullname: user.fullname, email: user.email, password: ''
   });
 
   const editDetail = async () => {
     setModalOpen(false);
     if (!editData.fullname || !editData.email) {
-      Alert.alert('Error', 'Please fill all required fields!');
-      return;
+      return Alert.alert(t('common.error'), t('profile.requiredFields'));
     }
-
     try {
-      const updateData = {
-        fullname: editData.fullname,
-        email: editData.email,
-      };
-
-      if (editData.password && editData.password.trim() !== '') {
-        updateData.password = editData.password;
-      }
-
-      const response = await axiosInstance.put(
-        `/users/${user.id}`,
-        updateData
-      );
-
-      if (response.status === 200) {
-        const updatedUser = {
-          ...user,
-          fullname: editData.fullname,
-          email: editData.email,
-        };
-
-        const userData = await AsyncStorage.getItem('@user_data');
-        if (userData) {
-          const parsedUserData = JSON.parse(userData);
-          const updatedUserData = {
-            ...parsedUserData,
-            fullname: editData.fullname,
-            email: editData.email,
-          };
-          await AsyncStorage.setItem('@user_data', JSON.stringify(updatedUserData));
+      const updateData = { fullname: editData.fullname, email: editData.email };
+      if (editData.password.trim()) updateData.password = editData.password;
+      const res = await axiosInstance.put(`/users/${user.id}`, updateData);
+      if (res.status === 200) {
+        const updatedUser = { ...user, ...updateData };
+        const stored = await AsyncStorage.getItem('@user_data');
+        if (stored) {
+          const pd = JSON.parse(stored);
+          await AsyncStorage.setItem('@user_data',
+            JSON.stringify({ ...pd, ...updateData })
+          );
         }
-
-        setEditData(prev => ({ ...prev, password: '' }));
+        setEditData(prev=>({...prev,password:''}));
         onProfileUpdate(updatedUser);
-        Alert.alert('Success', 'Profile updated successfully!');
+        Alert.alert(t('common.success'), t('profile.profileUpdated'));
       }
-    } catch (error) {
-      console.error('Profile update error:', error);
-      if (error.response) {
-        switch (error.response.status) {
-          case 400:
-            Alert.alert('Error', 'Invalid data provided. Please check your inputs.');
-            break;
-          case 401:
-            Alert.alert('Error', 'Session expired. Please login again.');
-            break;
-          case 409:
-            Alert.alert('Error', 'Email already exists. Please use a different email.');
-            break;
-          default:
-            Alert.alert('Error', 'An error occurred while updating the profile');
-        }
+    } catch (err) {
+      console.error(err);
+      const st = err.response?.status;
+      if (st === 400) {
+        Alert.alert(t('common.error'), t('profile.invalidData'));
+      } else if (st === 401) {
+        Alert.alert(t('common.error'), t('profile.sessionExpired'));
+      } else if (st === 409) {
+        Alert.alert(t('common.error'), t('profile.emailExists'));
       } else {
-        Alert.alert('Error', 'Network error. Please check your connection.');
+        Alert.alert(t('common.error'), t('profile.profileUpdateError'));
       }
     }
   };
 
   const handleImagePicker = () => {
     ImagePicker.launchImageLibrary({
-      mediaType: 'photo',
-      includeBase64: false,
-      maxHeight: 500,
-      maxWidth: 500,
-      quality: 0.7,
-    }, async (response) => {
-      if (response.didCancel) {
-        console.log('User cancelled image picker');
-      } else if (response.error) {
-        console.log('ImagePicker Error: ', response.error);
-      } else if (response.assets && response.assets.length > 0) {
-        try {
-          const asset = response.assets[0];
-          const formData = new FormData();
-          formData.append('profilePicture', {
-            uri: asset.uri,
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || 'profile.jpg',
-          });
-
-          const uploadResponse = await axiosInstance.post(
-            `/users/${user.id}/profile-picture`,
-            formData,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            }
+      mediaType: 'photo', maxHeight:500, maxWidth:500, quality:0.7,
+    }, async (res) => {
+      if (res.didCancel) {
+        return console.log('User cancelled image picker');
+      }
+      if (res.error) {
+        console.log(res.error);
+        return Alert.alert(t('common.error'), t('profile.uploadError'));
+      }
+      const asset = res.assets?.[0];
+      if (!asset) {
+        return Alert.alert(t('common.error'), t('profile.noImage'));
+      }
+      try {
+        const fd = new FormData();
+        fd.append('profilePicture', {
+          uri: asset.uri, type: asset.type, name: asset.fileName
+        });
+        const up = await axiosInstance.post(
+          `/users/${user.id}/profile-picture`, fd,
+          { headers:{ 'Content-Type':'multipart/form-data' }}
+        );
+        const url = up.data.profilePictureUrl + '?t=' + Date.now();
+        setProfilePicture(url);
+        // sync storage + parent
+        const pu = { ...user, profilePictureUrl: url };
+        const st = await AsyncStorage.getItem('@user_data');
+        if (st) {
+          const pd = JSON.parse(st);
+          await AsyncStorage.setItem('@user_data',
+            JSON.stringify({ ...pd, profilePictureUrl: url })
           );
-
-          if (uploadResponse.data && uploadResponse.data.profilePictureUrl) {
-            const imageUrl = `${uploadResponse.data.profilePictureUrl}?t=${new Date().getTime()}`;
-            setProfilePicture(imageUrl);
-            
-            const updatedUser = {
-              ...user,
-              profilePictureUrl: imageUrl
-            };
-
-            const userData = await AsyncStorage.getItem('@user_data');
-            if (userData) {
-              const parsedUserData = JSON.parse(userData);
-              const updatedUserData = {
-                ...parsedUserData,
-                profilePicture: imageUrl
-              };
-              await AsyncStorage.setItem('@user_data', JSON.stringify(updatedUserData));
-            }
-
-            onProfileUpdate(updatedUser);
-            Alert.alert('Success', 'Profile picture updated successfully!');
-          }
-        } catch (error) {
-          console.error('Error uploading profile picture:', error);
-          Alert.alert('Error', 'Error uploading profile picture. Please try again.');
         }
-      } else {
-        Alert.alert('Error', 'No image selected or image selection failed.');
+        onProfileUpdate(pu);
+        Alert.alert(t('common.success'), t('profile.profilePictureUpdated'));
+      } catch (e) {
+        console.error(e);
+        Alert.alert(t('common.error'), t('profile.uploadError'));
       }
     });
   };
 
   return (
     <>
-      <Text style={[styles.sectionTitle, { color: theme.text }]}>User Details</Text>
+      <Text style={[styles.sectionTitle, { color:theme.text }]}>
+        {t('profile.userDetails')}
+      </Text>
       <View style={[styles.contentCard, {
         backgroundColor: theme.inputBackground,
         borderColor: theme.border,
       }]}>
         <TouchableOpacity onPress={handleImagePicker} style={styles.profilePictureContainer}>
-          {profilePicture ? (
-            <Image
-              source={{ uri: profilePicture }}
-              style={styles.profilePicture}
-              onError={(e) => {
-                console.error('Error loading image:', e.nativeEvent.error);
-                setProfilePicture(null);
-              }}
-            />
-          ) : (
-            <Icon name="account-circle" size={100} color={theme.text} />
-          )}
-          <View style={[styles.cameraIconContainer, { backgroundColor: theme.primary }]}>
+          {profilePicture
+            ? <Image source={{ uri:profilePicture }} style={styles.profilePicture} />
+            : <Icon name="account-circle" size={100} color={theme.text} />
+          }
+          <View style={[styles.cameraIconContainer, { backgroundColor:theme.primary }]}>
             <Icon name="camera-alt" size={20} color={theme.buttonText} />
           </View>
         </TouchableOpacity>
-        <Text style={[styles.text, { color: theme.text }]}>Name: {user.fullname}</Text>
-        <Text style={[styles.text, { color: theme.text }]}>Email: {user.email}</Text>
-        <Text style={[styles.text, { color: theme.text }]}>Role: {user.role}</Text>
+        <Text style={[styles.text, { color:theme.text }]}>
+          {t('profile.name')}: {user.fullname}
+        </Text>
+        <Text style={[styles.text, { color:theme.text }]}>
+          {t('profile.email')}: {user.email}
+        </Text>
+        <Text style={[styles.text, { color:theme.text }]}>
+          {t('profile.role')}: {user.role}
+        </Text>
         <TouchableOpacity
-          style={[styles.button, {
-            backgroundColor: theme.primary,
-            shadowColor: theme.shadowColor,
-          }]}
-          onPress={() => setModalOpen(true)}
+          style={[styles.button,{ backgroundColor:theme.primary }]}
+          onPress={()=>setModalOpen(true)}
         >
-          <Text style={[styles.buttonText, { color: theme.buttonText }]}>Edit Profile</Text>
+          <Text style={[styles.buttonText,{ color:theme.buttonText }]}>
+            {t('profile.editProfile')}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Modal for editing profile */}
       <Modal visible={modalOpen} animationType="slide" transparent>
         <View style={styles.modalWrapper}>
-          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Edit Profile</Text>
+          <View style={[styles.modalContent,{ backgroundColor:theme.cardBackground }]}>
+            <Text style={[styles.modalTitle,{ color:theme.text }]}>
+              {t('profile.editProfile')}
+            </Text>
             <TextInput
-              style={[styles.input, {
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.border,
-                color: theme.text
+              style={[styles.input,{
+                backgroundColor:theme.inputBackground,
+                borderColor:theme.border, color:theme.text
               }]}
-              placeholder="Name"
-              placeholderTextColor={theme.placeholder}
+              placeholder={t('profile.name')}
               value={editData.fullname}
-              onChangeText={(text) => setEditData(prev => ({ ...prev, fullname: text }))}
-            />
-            <TextInput
-              style={[styles.input, {
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.border,
-                color: theme.text
-              }]}
-              placeholder="Email"
+              onChangeText={text=>setEditData(p=>({...p,fullname:text}))}
               placeholderTextColor={theme.placeholder}
-              value={editData.email}
-              onChangeText={(text) => setEditData(prev => ({ ...prev, email: text }))}
             />
             <TextInput
-              style={[styles.input, {
-                backgroundColor: theme.inputBackground,
-                borderColor: theme.border,
-                color: theme.text
+              style={[styles.input,{
+                backgroundColor:theme.inputBackground,
+                borderColor:theme.border, color:theme.text
+              }]}
+              placeholder={t('profile.email')}
+              value={editData.email}
+              onChangeText={text=>setEditData(p=>({...p,email:text}))}
+              placeholderTextColor={theme.placeholder}
+            />
+            <TextInput
+              style={[styles.input,{
+                backgroundColor:theme.inputBackground,
+                borderColor:theme.border, color:theme.text
               }]}
               placeholder="New Password (leave empty to keep current)"
-              placeholderTextColor={theme.placeholder}
               secureTextEntry
               value={editData.password}
-              onChangeText={(text) => setEditData(prev => ({ ...prev, password: text }))}
+              onChangeText={text=>setEditData(p=>({...p,password:text}))}
+              placeholderTextColor={theme.placeholder}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, {
-                  backgroundColor: theme.primary,
-                  shadowColor: theme.shadowColor,
-                }]}
+                style={[styles.modalButton,{ backgroundColor:theme.primary }]}
                 onPress={editDetail}
               >
-                <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>Save</Text>
+                <Text style={[styles.modalButtonText,{ color:theme.buttonText }]}>
+                  {t('common.save')}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.cancelModalButton, {
-                  backgroundColor: theme.danger,
-                  shadowColor: theme.shadowColor,
-                }]}
-                onPress={() => {
+                style={[styles.cancelModalButton,{ backgroundColor:theme.danger }]}
+                onPress={()=>{
                   setModalOpen(false);
-                  setEditData({
-                    fullname: user.fullname,
-                    email: user.email,
-                    password: ''
-                  });
+                  setEditData({ fullname:user.fullname, email:user.email, password:'' });
                 }}
               >
-                <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>Cancel</Text>
+                <Text style={[styles.modalButtonText,{ color:theme.buttonText }]}>
+                  {t('common.cancel')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

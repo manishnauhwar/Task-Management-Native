@@ -37,7 +37,6 @@ const Dashboardscreen = () => {
           <View style={styles.chartsSection}>
             <Charts />
           </View>
-          {/* Uncomment below if you wish to render TaskTable */}
           {/* <View style={styles.tableSection}>
             <TaskTable />
           </View> */}

@@ -32,7 +32,6 @@ const SortFilterBar = ({
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
   const [filterMenuVisible, setFilterMenuVisible] = useState(false);
 
-  // Define sort items using translation keys
   const sortFieldItems = [
     { label: t('sortFilter.sortField.status'), value: 'status' },
     { label: t('sortFilter.sortField.priority'), value: 'priority' }
@@ -65,7 +64,7 @@ const SortFilterBar = ({
           placeholder={t('sortFilter.searchPlaceholder')}
           onChangeText={setSearchQuery}
           value={searchQuery}
-          style={styles.searchBar}
+          style={[styles.searchBar, { backgroundColor: customTheme.inputBackground }]}
           iconColor={customTheme.primary}
           inputStyle={{ color: customTheme.text }}
           placeholderTextColor={customTheme.placeholder}
@@ -210,8 +209,8 @@ const styles = StyleSheet.create({
   },
   menu: {
     marginTop: 60,
-    left:200,
-    width:"40%"
+    left: 200,
+    width: "40%"
   },
   menuTitle: {
     fontSize: 16,
@@ -223,7 +222,6 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   filterMenu: {
-    Width: 50,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },

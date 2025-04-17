@@ -33,6 +33,16 @@ const SettingsScreen = () => {
     { label: 'Hindi', code: 'hi' },
   ];
 
+  // Save dark mode preference to AsyncStorage
+  const handleThemeChange = async (value) => {
+    setIsDarkMode(value);
+    try {
+      await AsyncStorage.setItem('isDarkMode', JSON.stringify(value));
+    } catch (error) {
+      console.error('Failed to save theme preference:', error.message);
+    }
+  };
+
   // Handle language selection
   const handleLanguageChange = async (language) => {
     setSelectedLanguage(language.code);
@@ -40,10 +50,12 @@ const SettingsScreen = () => {
     setShowLanguageModal(false);
   };
 
-  // Update notification preferences on the backend
+  // Update notification preferences on the backend and locally
   const updateNotificationPreferences = async (type, value) => {
     try {
       await axiosInstance.patch('/notifications/preferences', { [type]: value });
+      // Also save to AsyncStorage
+      await AsyncStorage.setItem(`notification_${type}`, JSON.stringify(value));
     } catch (error) {
       console.error('Failed to update notification preferences:', error.message);
     }
@@ -51,18 +63,47 @@ const SettingsScreen = () => {
 
   // Fetch current preferences on component mount
   useEffect(() => {
-    const fetchPreferences = async () => {
+    const loadStoredPreferences = async () => {
       try {
-        const res = await axiosInstance.get('/notifications/preferences');
-        const prefs = res.data.preferences;
-        setEmailNotifications(prefs.email);
-        setAppNotifications(prefs.inApp);
+        // Load theme preference
+        const storedTheme = await AsyncStorage.getItem('isDarkMode');
+        if (storedTheme !== null) {
+          setIsDarkMode(JSON.parse(storedTheme));
+        }
+
+        // Load notification preferences from local storage first
+        const storedEmailPref = await AsyncStorage.getItem('notification_email');
+        const storedAppPref = await AsyncStorage.getItem('notification_inApp');
+        
+        if (storedEmailPref !== null) {
+          setEmailNotifications(JSON.parse(storedEmailPref));
+        }
+        
+        if (storedAppPref !== null) {
+          setAppNotifications(JSON.parse(storedAppPref));
+        }
+
+        // Then try to fetch from API to ensure we have the latest
+        try {
+          const res = await axiosInstance.get('/notifications/preferences');
+          const prefs = res.data.preferences;
+          setEmailNotifications(prefs.email);
+          setAppNotifications(prefs.inApp);
+          
+          // Update local storage with latest from API
+          await AsyncStorage.setItem('notification_email', JSON.stringify(prefs.email));
+          await AsyncStorage.setItem('notification_inApp', JSON.stringify(prefs.inApp));
+        } catch (apiError) {
+          console.error('Error fetching notification preferences:', apiError.message);
+          // Continue using locally stored preferences if API fails
+        }
       } catch (error) {
-        console.error('Error fetching notification preferences:', error.message);
+        console.error('Error loading stored preferences:', error.message);
       }
     };
-    fetchPreferences();
-  }, []);
+
+    loadStoredPreferences();
+  }, [setIsDarkMode]);
 
   // Reusable render function for setting items
   const renderSettingItem = (title, description, value, onValueChange) => (
@@ -100,7 +141,7 @@ const SettingsScreen = () => {
           t('settings.darkMode'),
           t('settings.darkModeDesc'),
           isDarkMode,
-          () => setIsDarkMode(!isDarkMode)
+          handleThemeChange // Use the new handler that saves to AsyncStorage
         )}
 
         {/* Notification Preferences */}

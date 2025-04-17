@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const baseURL = 'http://10.0.2.2:5000/';
+const baseURL = 'https://taskmanagement-backend-2.onrender.com';
 const TOKEN_KEY = '@auth_token';
 
 const axiosInstance = axios.create({

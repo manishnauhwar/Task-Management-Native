@@ -1,17 +1,16 @@
-import { View,TouchableOpacity, RefreshControl, FlatList,StyleSheet} from 'react-native';
+import { View, TouchableOpacity, RefreshControl, FlatList, StyleSheet } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
-import {Text, Button,Portal,Dialog,TextInput,Switch,Surface,List,Divider,Snackbar,Chip,IconButton,TouchableRipple,Menu} from 'react-native-paper';
+import { Text, Button, Portal, Dialog, TextInput, Switch, Surface, List, Divider, Snackbar, Chip, IconButton, TouchableRipple, Menu } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axiosInstance from '../../utils/axiosinstance';
-import { useTheme } from 'react-native-paper';
-import { useTheme as useCustomTheme } from '../../utils/ThemeContext';
+import { useTheme } from '../../utils/ThemeContext';
 import { getCurrentUser } from '../../utils/authService';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 
 const getStatusColor = (status) => {
   if (!status) return '#9e9e9e';
-  
+
   switch (String(status).toLowerCase()) {
     case 'completed': return '#4caf50';
     case 'in progress': return '#2196f3';
@@ -23,7 +22,7 @@ const getStatusColor = (status) => {
 
 const getPriorityColor = (priority) => {
   if (!priority) return '#9e9e9e';
-  
+
   switch (String(priority).toLowerCase()) {
     case 'high': return '#f44336';
     case 'medium': return '#ff9800';
@@ -51,8 +50,7 @@ const TaskTable = ({
   filterPriority = 'All',
   searchQuery = ''
 }) => {
-  const paperTheme = useTheme();
-  const { theme: customTheme } = useCustomTheme();
+  const { theme} = useTheme();
   const { t } = useTranslation();
   const [user, setUser] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -86,6 +84,7 @@ const TaskTable = ({
       }
     }, [isAddDialogVisible])
   );
+  
   useEffect(() => {
     filterAndSortTasks();
   }, [tasks, filterStatus, filterPriority, searchQuery, sortField, sortOrder]);
@@ -119,12 +118,10 @@ const TaskTable = ({
           }
           return task;
         });
-        
+
         let userTasks = processedTasks;
-        
-        // Filter tasks based on user role
+
         if (currentUser.role === 'admin') {
-          // Admin sees all tasks
         } else if (currentUser.role === 'manager') {
           try {
             const teamsResponse = await axiosInstance.get('/teams');
@@ -156,7 +153,7 @@ const TaskTable = ({
             task => task.userId === currentUser.id || task.assignedTo === currentUser.id
           );
         }
-        
+
         setTasks(userTasks.reverse());
       } else {
         setTasks([]);
@@ -174,39 +171,39 @@ const TaskTable = ({
 
   const formatDateForBackend = (dateString) => {
     if (!dateString) return '';
-    
+
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
-    
+
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
       const [month, day, year] = dateString.split('/');
       return `${year}-${month}-${day}`;
     }
-    
+
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
   const filterAndSortTasks = () => {
     const filtered = tasks.filter(task => {
-      const searchMatch = !searchQuery || 
+      const searchMatch = !searchQuery ||
         (task.title && task.title.toLowerCase().includes(searchQuery.toLowerCase()));
-      
+
       const statusMatch = filterStatus === 'All' ||
         (filterStatus === 'overdue' && task.status === 'overdue') ||
         (filterStatus !== 'overdue' && task.status && task.status.toLowerCase() === filterStatus.toLowerCase());
-        
-      const priorityMatch = filterPriority === 'All' || 
+
+      const priorityMatch = filterPriority === 'All' ||
         (task.priority && task.priority.toLowerCase() === filterPriority.toLowerCase());
-        
+
       return searchMatch && statusMatch && priorityMatch;
     });
 
     const sorted = [...filtered].sort((a, b) => {
       if (!sortField) return 0;
-      
+
       const valA = a[sortField] ? String(a[sortField]).toLowerCase() : '';
       const valB = b[sortField] ? String(b[sortField]).toLowerCase() : '';
-      
+
       if (sortField === 'priority') {
         const priorityOrder = { high: 1, medium: 2, low: 3 };
         const orderA = priorityOrder[valA] || 999;
@@ -218,7 +215,7 @@ const TaskTable = ({
         const orderB = statusOrder[valB] || 999;
         return sortOrder === 'asc' ? orderA - orderB : orderB - orderA;
       }
-      
+
       return sortOrder === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
     });
 
@@ -298,7 +295,7 @@ const TaskTable = ({
       setSnackbarVisible(true);
       return;
     }
-    
+
     if (!newTask.title.trim()) {
       setError(t('taskTable.pleaseEnterTitle'));
       setSnackbarVisible(true);
@@ -316,9 +313,9 @@ const TaskTable = ({
         assignedTo: user.id,
         userId: user.id,
       };
-      
+
       const response = await axiosInstance.post('/tasks/post', taskToSubmit);
-      
+
       if (response.data) {
         setTasks([response.data, ...tasks]);
         setNewTask({ title: '', description: '', dueDate: '', priority: 'Medium' });
@@ -361,12 +358,12 @@ const TaskTable = ({
     }
     setNewTask({ ...newTask, dueDate: text });
   };
-  
+
   const renderItem = ({ item }) => (
     <TouchableRipple onPress={() => handleTaskPress(item)}>
-      <View style={{ flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+      <View style={{ flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <View style={{ flex: 3 }}>
-          <Text numberOfLines={2} style={{ fontWeight: '500' }}>{item.title}</Text>
+          <Text numberOfLines={2} style={{ fontWeight: '500', color: theme.text }}>{item.title}</Text>
         </View>
         <View style={{ flex: 2, alignItems: 'center' }}>
           <StatusChip status={item.status} />
@@ -377,7 +374,7 @@ const TaskTable = ({
         <View style={{ flex: 1, alignItems: 'center' }}>
           <IconButton
             icon={item.status === 'Completed' ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-            iconColor={item.status === 'Completed' ? '#4caf50' : '#9e9e9e'}
+            iconColor={item.status === 'Completed' ? theme.success : '#9e9e9e'}
             size={24}
             onPress={(e) => {
               e.stopPropagation();
@@ -390,34 +387,33 @@ const TaskTable = ({
   );
 
   return (
-    <Surface style={{ flex: 1, backgroundColor: '#fff' }}>
-      <TouchableOpacity 
-        style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}
+    <Surface style={{ flex: 1, backgroundColor: theme.background }}>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}
         onPress={() => setIsAddDialogVisible(true)}
       >
-        <Icon name="plus-circle" size={24} color="#6366f1" />
-        <Text style={{ marginLeft: 8, color: '#6366f1', fontWeight: '500' }}>{t('taskTable.addNewTask')}</Text>
+        <Icon name="plus-circle" size={24} color={theme.primary} />
+        <Text style={{ marginLeft: 8, color: theme.primary, fontWeight: '500' }}>{t('taskTable.addNewTask')}</Text>
       </TouchableOpacity>
 
-      {/* Fixed Header */}
-      <View style={{ flexDirection: 'row', backgroundColor: '#f5f5f5', padding: 12, borderBottomWidth: 1, borderBottomColor: '#e0e0e0' }}>
+      <View style={{ flexDirection: 'row', backgroundColor: theme.surface, padding: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <View style={{ flex: 3 }}>
-          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.title')}</Text>
+          <Text style={{ fontWeight: 'bold', color: theme.text }}>{t('taskTable.header.title')}</Text>
+        </View>
+        <View style={{ flex: 3, alignItems: 'center' }}>
+          <Text style={{ fontWeight: 'bold', color: theme.text }}>{t('taskTable.header.status')}</Text>
         </View>
         <View style={{ flex: 2, alignItems: 'center' }}>
-          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.status')}</Text>
-        </View>
-        <View style={{ flex: 2, alignItems: 'center' }}>
-          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.priority')}</Text>
+          <Text style={{ fontWeight: 'bold', color: theme.text }}>{t('taskTable.header.priority')}</Text>
         </View>
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={{ fontWeight: 'bold' }}>{t('taskTable.header.done')}</Text>
+          <Text style={{ fontWeight: 'bold', color: theme.text }}>{t('taskTable.header.done')}</Text>
         </View>
       </View>
 
       {loading && filteredTasks.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text>{t('taskTable.loading')}</Text>
+          <Text style={{ color: theme.text }}>{t('taskTable.loading')}</Text>
         </View>
       ) : (
         <FlatList
@@ -426,11 +422,11 @@ const TaskTable = ({
           keyExtractor={(item) => item._id || String(Math.random())}
           ListEmptyComponent={
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-              <Text>{t('taskTable.noTasks')}</Text>
+              <Text style={{ color: theme.text }}>{t('taskTable.noTasks')}</Text>
             </View>
           }
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#6366f1']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
           }
           contentContainerStyle={filteredTasks.length === 0 ? { flex: 1 } : null}
           showsVerticalScrollIndicator={false}
@@ -492,12 +488,12 @@ const TaskTable = ({
           <Dialog.Actions>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 8 }}>
               {selectedTask && canDeleteTask(selectedTask) && (
-                <Button mode="contained" buttonColor="#f44336" onPress={() => { setIsDialogVisible(false); setIsDeleteDialogVisible(true); }}>
+                <Button mode="contained" buttonColor={theme.error} onPress={() => { setIsDialogVisible(false); setIsDeleteDialogVisible(true); }}>
                   {t('taskTable.dialog.delete')}
                 </Button>
               )}
               {selectedTask && canEditTask(selectedTask) && (
-                <Button mode="contained" onPress={() => { setIsDialogVisible(false); setIsEditDialogVisible(true); }}>
+                <Button mode="contained" buttonColor={theme.primary} onPress={() => { setIsDialogVisible(false); setIsEditDialogVisible(true); }}>
                   {t('taskTable.dialog.edit')}
                 </Button>
               )}
@@ -507,6 +503,7 @@ const TaskTable = ({
             </View>
           </Dialog.Actions>
         </Dialog>
+        
         <Dialog visible={isEditDialogVisible} onDismiss={() => setIsEditDialogVisible(false)} style={{ borderRadius: 8 }}>
           <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.editTitle')}</Dialog.Title>
           <Dialog.Content>
@@ -566,7 +563,7 @@ const TaskTable = ({
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setIsEditDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
-            <Button mode="contained" onPress={updateTask}>{t('taskTable.dialog.save')}</Button>
+            <Button mode="contained" buttonColor={theme.primary} onPress={updateTask}>{t('taskTable.dialog.save')}</Button>
           </Dialog.Actions>
         </Dialog>
 
@@ -577,7 +574,7 @@ const TaskTable = ({
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setIsDeleteDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
-            <Button mode="contained" buttonColor="#f44336" onPress={deleteTask}>{t('taskTable.dialog.delete')}</Button>
+            <Button mode="contained" buttonColor={theme.error} onPress={deleteTask}>{t('taskTable.dialog.delete')}</Button>
           </Dialog.Actions>
         </Dialog>
 
@@ -646,7 +643,7 @@ const TaskTable = ({
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setIsAddDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
-            <Button mode="contained" onPress={submitNewTask}>{t('taskTable.dialog.addTask')}</Button>
+            <Button mode="contained" buttonColor={theme.primary} onPress={submitNewTask}>{t('taskTable.dialog.addTask')}</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -667,153 +664,3 @@ const TaskTable = ({
 };
 
 export default TaskTable;
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    elevation: 4,
-    borderRadius: 12,
-    backgroundColor: 'white',
-    maxHeight: '100%',
-    paddingHorizontal: 10,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexGrow: 1,
-    paddingBottom: 16,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
-  },
-  headerText: {
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  headerTitleCell: {
-    flex: 1.5,
-  },
-  headerStatusCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerPriorityCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerActionCell: {
-    width: 50,
-    alignItems: 'center',
-  },
-  row: {
-    flexDirection: 'row',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    alignItems: 'center',
-  },
-  titleCell: {
-    flex: 1.5,
-  },
-  statusCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  priorityCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  actionCell: {
-    width: 50,
-    alignItems: 'center',
-  },
-  titleText: {
-    fontSize: 14,
-  },
-  statusChip: {
-    height: 28,
-  },
-  priorityChip: {
-    height: 28,
-  },
-  dialog: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 8,
-  },
-  input: {
-    marginBottom: 16,
-    backgroundColor: '#f8f9fa',
-  },
-  detailsCard: {
-    padding: 8,
-    marginBottom: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-  },
-  dialogTitle: {
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginBottom: 16,
-  },
-  actionIcon: {
-    padding: 4,
-  },
-  buttonContainer: {
-    marginTop: 16,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  addTaskButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f3f4f6',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  addTaskText: {
-    marginLeft: 8,
-    color: '#6366f1',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  emptyContainer: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  listFooter: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  statusToggleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  statusToggleLabel: {
-    marginRight: 8,
-    fontSize: 14,
-  },
-});

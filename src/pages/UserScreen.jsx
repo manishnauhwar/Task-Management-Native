@@ -113,13 +113,13 @@ const UserScreen = () => {
   };
 
   const getStatusCardColor = (status) => {
-    if (!status) return '#f3f4f6';
+    if (!status) return theme.background;
     status = status.toLowerCase();
     if (status === 'completed') return '#ecfdf5';
     if (status === 'in progress') return '#fef9c3';
     if (status === 'to do') return '#dbeafe';
     if (status === 'overdue') return '#fee2e2';
-    return '#f3f4f6';
+    return theme.background;
   };
 
   const getPriorityColor = (priority) => {
@@ -218,7 +218,7 @@ const UserScreen = () => {
           >
             {filteredTasks.map(task => (
               <TouchableOpacity key={task._id} activeOpacity={0.7}>
-                <Card style={[styles.card, { backgroundColor: getStatusCardColor(task.status) }]} elevation={2}>
+                <Card style={[styles.card, { backgroundColor: theme.background }]} elevation={2}>
                   <View style={styles.cardContent}>
                     <View style={styles.cardLeftBorder} backgroundColor={getStatusColor(task.status)} />
                     <View style={styles.cardMainContent}>
@@ -229,12 +229,12 @@ const UserScreen = () => {
                           style={{ backgroundColor: getPriorityColor(task.priority) }}
                         />
                         <View style={styles.titleContainer}>
-                          <Text style={styles.taskTitle} numberOfLines={1}>
+                          <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
                             {task.title}
                           </Text>
                           <View style={styles.dateContainer}>
-                            <Icon name="calendar" size={14} color="#6B7280" />
-                            <Text style={styles.dateText}>
+                            <Icon name="calendar" size={14} color={theme.textSecondary} />
+                            <Text style={[styles.dateText, { color: theme.textSecondary }]}>
                               {formatDate(task.dueDate)}
                             </Text>
                           </View>
@@ -244,7 +244,7 @@ const UserScreen = () => {
                         </View>
                       </View>
                       {task.description && (
-                        <Text style={styles.description} numberOfLines={2}>
+                        <Text style={[styles.description, { color: theme.text }]} numberOfLines={2}>
                           {task.description}
                         </Text>
                       )}
@@ -343,7 +343,6 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#374151',
     marginBottom: 2,
   },
   statusIconContainer: {
@@ -362,11 +361,9 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 12,
     marginLeft: 4,
-    color: '#6B7280',
   },
   description: {
     fontSize: 14,
-    color: '#4B5563',
     marginBottom: 12,
     lineHeight: 20,
   },

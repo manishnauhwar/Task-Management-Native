@@ -3,7 +3,7 @@ import { Text, View, StyleSheet, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import SortFilterBar from '../components/Tasks/SortFilterBar';
-import TaskTable from '../components/Dashboard/TaskTable';
+import TaskTable from '../components/Tasks/TaskTable';
 import { useTheme } from '../utils/ThemeContext';
 
 const TaskScreen = () => {
@@ -24,36 +24,34 @@ const TaskScreen = () => {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <StatusBar
-          backgroundColor={theme.background}
-          barStyle={theme.text === '#ffffff' ? "light-content" : "dark-content"}
-        />
-        <View style={styles.contentContainer}>
-          <View style={styles.filterSection}>
-            <SortFilterBar
-              sortField={sortField}
-              setSortField={setSortField}
-              sortOrder={sortOrder}
-              setSortOrder={setSortOrder}
-              filterStatus={filterStatus}
-              setFilterStatus={setFilterStatus}
-              filterPriority={filterPriority}
-              setFilterPriority={setFilterPriority}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-            />
-          </View>
-          <View style={styles.tableSection}>
-            <TaskTable
-              sortField={sortField}
-              sortOrder={sortOrder}
-              filterStatus={filterStatus}
-              filterPriority={filterPriority}
-              searchQuery={searchQuery}
-            />
-          </View>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <StatusBar
+        backgroundColor={theme.background}
+        barStyle={theme.text === '#ffffff' ? "light-content" : "dark-content"}
+      />
+      <View style={styles.contentContainer}>
+        <View style={styles.filterSection}>
+          <SortFilterBar
+            sortField={sortField}
+            setSortField={setSortField}
+            sortOrder={sortOrder}
+            setSortOrder={setSortOrder}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+            filterPriority={filterPriority}
+            setFilterPriority={setFilterPriority}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+          />
+        </View>
+        <View style={styles.tableSection}>
+          <TaskTable
+            sortField={sortField}
+            sortOrder={sortOrder}
+            filterStatus={filterStatus}
+            filterPriority={filterPriority}
+            searchQuery={searchQuery}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -61,8 +59,9 @@ const TaskScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   contentContainer: {
     flex: 1,
