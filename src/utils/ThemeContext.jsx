@@ -1,11 +1,27 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
   const systemTheme = useColorScheme();
   const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    const loadThemePreference = async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem('isDarkMode');
+        if (storedTheme !== null) {
+          setIsDarkMode(JSON.parse(storedTheme));
+        }
+      } catch (error) {
+        console.error('Failed to load theme preference:', error.message);
+      }
+    };
+
+    loadThemePreference();
+  }, []);
 
   const lightTheme = {
     background: '#f8f9fa',

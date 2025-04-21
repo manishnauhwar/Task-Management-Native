@@ -1,10 +1,10 @@
 // ProfileScreen.js
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../utils/axiosinstance';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import UserStats from '../components/profile/UserStats';
 import AdminUserManagement from '../components/profile/AdminUserManagement';
 import ProfileDetails from '../components/profile/ProfileDetails';
+// import ManagerTeamManagement from '../components/profile/ManagerTeamManagement';
 
 const ProfileScreen = () => {
   const { t } = useTranslation();
@@ -21,16 +22,20 @@ const ProfileScreen = () => {
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [error, setError] = useState(null);
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
+      
       const token = await AsyncStorage.getItem('@auth_token');
       if (!token) {
         navigation.navigate('Login');
         return;
       }
+      
       const userData = await AsyncStorage.getItem('@user_data');
       if (!userData) {
         navigation.navigate('Login');
@@ -38,50 +43,76 @@ const ProfileScreen = () => {
       }
 
       const parsedUserData = JSON.parse(userData);
+      
+      setUser(parsedUserData);
+      
+      const userId = parsedUserData.id || parsedUserData._id;
+      
+      if (!userId) {
+        setError(t('profile.errorUserIdNotFound'));
+        setLoading(false);
+        return;
+      }
 
-      if (parsedUserData.id) {
-        try {
-          const response = await axiosInstance.get(`/users/${parsedUserData.id}`);
+      try {
+        const response = await axiosInstance.get(`/users/${userId}`);
 
-          if (response.data && response.data.user) {
-            const userData = response.data.user;
+        if (response.data && response.data.user) {
+          const fetchedUserData = response.data.user;
 
-            if (!userData.id && userData._id) {
-              userData.id = userData._id;
-            }
-
-            setUser(userData);
-
-            if (userData.role === 'user') {
-              await fetchTaskData(userData);
-            }
-
-            if (userData.role === 'admin') {
-              await fetchAllUsers();
-            }
-          } else {
-            setError(  t('profile.errorLoadUserData'));
+          if (!fetchedUserData.id && fetchedUserData._id) {
+            fetchedUserData.id = fetchedUserData._id;
           }
-        } catch (error) {
-          if (error.response) {
-            setError( t('profile.errorLoadUserDetails'));
+
+          const updatedUserData = {
+            ...fetchedUserData,
+            id: fetchedUserData.id || fetchedUserData._id || userId,
+            googleProfilePictureUrl: fetchedUserData.googleProfilePictureUrl || parsedUserData.googleProfilePictureUrl,
+            profilePictureUrl: fetchedUserData.profilePictureUrl || parsedUserData.profilePictureUrl,
+            fullname: fetchedUserData.fullname || parsedUserData.fullname,
+            email: fetchedUserData.email || parsedUserData.email,
+            role: fetchedUserData.role || parsedUserData.role
+          };
+
+          // Update AsyncStorage with the latest data
+          await AsyncStorage.setItem('@user_data', JSON.stringify(updatedUserData));
+
+          // Update the state with the latest user data
+          setUser(updatedUserData);
+
+          // Fetch role-specific data
+          if (updatedUserData.role === 'user') {
+            await fetchTaskData(updatedUserData);
+          } else if (updatedUserData.role === 'admin') {
+            await fetchAllUsers();
+          } else if (updatedUserData.role === 'manager') {
+            await fetchTaskData(updatedUserData);
           }
         }
-      } else {
-        setError( t('profile.errorUserIdNotFound'));
+      } catch (error) {
+        console.error('Error fetching user details:', error);
+        
+        if (parsedUserData.role === 'user') {
+          await fetchTaskData(parsedUserData);
+        } else if (parsedUserData.role === 'admin') {
+          await fetchAllUsers();
+        } else if (parsedUserData.role === 'manager') {
+          await fetchTaskData(parsedUserData);
+        }
       }
     } catch (error) {
+      console.error('ProfileScreen error:', error);
       if (error.response?.status === 401) {
         await AsyncStorage.removeItem('@auth_token');
         await AsyncStorage.removeItem('@user_data');
         navigation.navigate('Login');
       } else {
-        setError( t('profile.errorLoadingProfile'));
+        setError(t('profile.errorLoadingProfile'));
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigation, t]);
 
   const fetchTaskData = async (userData) => {
     try {
@@ -99,13 +130,15 @@ const ProfileScreen = () => {
       const userTasks = allTasks.filter(task => {
         const taskAssignedToId = task.assignedTo?._id || task.assignedTo;
         const taskUserId = task.userId?._id || task.userId;
+        const userId = userData.id || userData._id;
 
-        return taskUserId === userData.id || taskAssignedToId === userData.id;
+        return taskUserId === userId || taskAssignedToId === userId;
       });
 
       setTasks(userTasks);
     } catch (error) {
-      setError( t('profile.errorLoadTasks'));
+      console.error('Error fetching tasks:', error);
+      setError(t('profile.errorLoadTasks'));
     }
   };
 
@@ -125,13 +158,34 @@ const ProfileScreen = () => {
         setAllUsers(standardizedUsers);
       }
     } catch (error) {
-      setError( t('profile.errorLoadUserList'));
+      console.error('Error fetching users:', error);
+      setError(t('profile.errorLoadUserList'));
     }
   };
 
-  useEffect(() => {
-    fetchUserData();
-  }, []);
+  const fetchTeams = async (userData) => {
+    try {
+      const response = await axiosInstance.get('/teams');
+      if (response.data && Array.isArray(response.data)) {
+        const managedTeams = response.data.filter(
+          team => team.manager && (team.manager._id === userData.id || team.manager === userData.id)
+        );
+        setTeams(managedTeams);
+      }
+    } catch (error) {
+      setError(t('profile.errorLoadTeams'));
+    }
+  };
+
+  // Use useFocusEffect to reload data when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserData();
+      return () => {
+        // Cleanup when screen is unfocused (optional)
+      };
+    }, [fetchUserData])
+  );
 
   const handleProfileUpdate = (updatedUser) => {
     setUser(updatedUser);
@@ -139,10 +193,19 @@ const ProfileScreen = () => {
     if (updatedUser.role === 'user') {
       fetchTaskData(updatedUser);
       setAllUsers([]);
+      setTeams([]);
     } else if (updatedUser.role === 'admin') {
       fetchAllUsers();
       setTasks([]);
+      setTeams([]);
+    } else if (updatedUser.role === 'manager') {
+      fetchTaskData(updatedUser);
+      setAllUsers([]);
     }
+  };
+
+  const handleTeamsUpdate = (updatedTeams) => {
+    setTeams(updatedTeams);
   };
 
   return (
@@ -173,25 +236,40 @@ const ProfileScreen = () => {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={[styles.section, {
-            backgroundColor: theme.cardBackground,
-            shadowColor: theme.shadowColor,
-          }]}>
-            {/* Profile Details Component */}
-            <ProfileDetails
-              user={user}
-              theme={theme}
-              onProfileUpdate={handleProfileUpdate}
-            />
+          {user && user.fullname ? (
+            <View style={[styles.section, {
+              backgroundColor: theme.cardBackground,
+              shadowColor: theme.shadowColor,
+            }]}>
+              {/* Profile Details Component - Show for all user roles */}
+              <ProfileDetails
+                user={user}
+                theme={theme}
+                onProfileUpdate={handleProfileUpdate}
+              />
 
-            {/* User Stats Component - Show only for users */}
-            {user.role === 'user' && (
-              <UserStats tasks={tasks} theme={theme} />
-            )}
-          </View>
+              {/* User Stats Component - Show only for users */}
+              {user.role === 'user' && (
+                <UserStats tasks={tasks} theme={theme} />
+              )}
+            </View>
+          ) : (
+            <View style={styles.errorContainer}>
+              <Icon name="error-outline" size={48} color={theme.error} />
+              <Text style={[styles.errorText, { color: theme.error }]}>
+                {t('profile.noUserDataAvailable')}
+              </Text>
+              <TouchableOpacity
+                style={[styles.retryButton, { backgroundColor: theme.primary }]}
+                onPress={fetchUserData}
+              >
+                <Text style={{ color: '#fff' }}>{t('profile.retry')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Admin User Management Component - Only for admins */}
-          {user.role === 'admin' && (
+          {user && user.role === 'admin' && (
             <View style={[styles.section, {
               backgroundColor: theme.cardBackground,
               shadowColor: theme.shadowColor,

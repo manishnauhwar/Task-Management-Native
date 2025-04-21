@@ -1,6 +1,6 @@
-import { View, TouchableOpacity, RefreshControl, FlatList, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, RefreshControl, FlatList, StyleSheet, Modal, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
-import { Text, Button, Portal, Dialog, TextInput, Switch, Surface, List, Divider, Snackbar, Chip, IconButton, TouchableRipple, Menu } from 'react-native-paper';
+import { Text, Button, Portal, Dialog, TextInput as PaperTextInput, Switch, Surface, List, Divider, Snackbar, Chip, IconButton, TouchableRipple, Menu } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axiosInstance from '../../utils/axiosinstance';
 import { useTheme } from '../../utils/ThemeContext';
@@ -72,6 +72,12 @@ const TaskTable = ({
     priority: 'Medium',
   });
   const [priorityMenuVisible, setPriorityMenuVisible] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadUserAndFetchTasks();
@@ -233,7 +239,9 @@ const TaskTable = ({
   };
 
   const toggleTaskStatus = async (task) => {
+    if (isTogglingStatus) return;
     try {
+      setIsTogglingStatus(true);
       const newStatus = task.status === 'Completed' ? 'To Do' : 'Completed';
       const response = await axiosInstance.put(`/tasks/${task._id}`, { ...task, status: newStatus });
       if (response.data) {
@@ -248,11 +256,15 @@ const TaskTable = ({
       console.error('Error updating task status:', error);
       setError(error.response?.data?.message || t('taskTable.failedStatusUpdate'));
       setSnackbarVisible(true);
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
 
   const updateTask = async () => {
+    if (isEditing) return;
     try {
+      setIsEditing(true);
       if (!selectedTask) return;
       const response = await axiosInstance.put(`/tasks/${selectedTask._id}`, {
         title: selectedTask.title,
@@ -262,7 +274,7 @@ const TaskTable = ({
         description: selectedTask.description,
       });
       if (response.data) {
-        setTasks(tasks.map(task => task._id === selectedTask._id ? response.data : task));
+        await loadUserAndFetchTasks();
         setIsEditDialogVisible(false);
         setError(t('taskTable.taskUpdated'));
         setSnackbarVisible(true);
@@ -271,25 +283,33 @@ const TaskTable = ({
       console.error('Error updating task:', error);
       setError(error.response?.data?.message || t('taskTable.failedUpdate'));
       setSnackbarVisible(true);
+    } finally {
+      setIsEditing(false);
     }
   };
 
   const deleteTask = async () => {
+    if (isDeleting) return;
     try {
+      setIsDeleting(true);
       if (!selectedTask) return;
       await axiosInstance.delete(`/tasks/${selectedTask._id}`);
-      setTasks(tasks.filter(task => task._id !== selectedTask._id));
+      await loadUserAndFetchTasks();
       setIsDeleteDialogVisible(false);
+      setIsDialogVisible(false);
       setError(t('taskTable.taskDeleted'));
       setSnackbarVisible(true);
     } catch (error) {
       console.error('Error deleting task:', error);
       setError(error.response?.data?.message || t('taskTable.failedDelete'));
       setSnackbarVisible(true);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const submitNewTask = async () => {
+    if (isSubmitting) return;
     if (!user) {
       setError(t('taskTable.pleaseLogin'));
       setSnackbarVisible(true);
@@ -303,10 +323,10 @@ const TaskTable = ({
     }
 
     try {
-      setLoading(true);
+      setIsSubmitting(true);
       const taskToSubmit = {
-        title: newTask.title,
-        description: newTask.description || '',
+        title: newTask.title.trim(),
+        description: newTask.description.trim() || '',
         dueDate: formatDateForBackend(newTask.dueDate),
         priority: newTask.priority || 'Medium',
         status: 'To Do',
@@ -314,21 +334,18 @@ const TaskTable = ({
         userId: user.id,
       };
 
-      const response = await axiosInstance.post('/tasks/post', taskToSubmit);
-
-      if (response.data) {
-        setTasks([response.data, ...tasks]);
-        setNewTask({ title: '', description: '', dueDate: '', priority: 'Medium' });
-        setIsAddDialogVisible(false);
-        setError(t('taskTable.taskAdded'));
-        setSnackbarVisible(true);
-      }
+      await axiosInstance.post('/tasks/post', taskToSubmit);
+      await loadUserAndFetchTasks();
+      setNewTask({ title: '', description: '', dueDate: '', priority: 'Medium' });
+      setIsAddDialogVisible(false);
+      setError(t('taskTable.taskAdded'));
+      setSnackbarVisible(true);
     } catch (error) {
       console.error('Error adding task:', error);
       setError(error.response?.data?.message || t('taskTable.failedAdd'));
       setSnackbarVisible(true);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -341,7 +358,7 @@ const TaskTable = ({
 
   const canDeleteTask = (task) => {
     if (!user) return false;
-    return ['admin', 'manager'].includes(user.role);
+    return ['admin', 'manager'].includes(user.role) || task.userId === user.id;
   };
 
   const formatDateForDisplay = (date) => {
@@ -351,12 +368,23 @@ const TaskTable = ({
   };
 
   const handleDueDateChange = (text) => {
+    let formattedText = text;
     if (text.length === 2 && !text.includes('/')) {
-      text = `${text}/`;
+      formattedText = `${text}/`;
     } else if (text.length === 5 && text.charAt(2) === '/' && !text.includes('/', 3)) {
-      text = `${text}/`;
+      formattedText = `${text}/`;
     }
-    setNewTask({ ...newTask, dueDate: text });
+    setSelectedTask(prev => ({ ...prev, dueDate: formattedText }));
+  };
+
+  const handleNewTaskDueDateChange = (text) => {
+    let formattedText = text;
+    if (text.length === 2 && !text.includes('/')) {
+      formattedText = `${text}/`;
+    } else if (text.length === 5 && text.charAt(2) === '/' && !text.includes('/', 3)) {
+      formattedText = `${text}/`;
+    }
+    setNewTask(prev => ({ ...prev, dueDate: formattedText }));
   };
 
   const renderItem = ({ item }) => (
@@ -369,13 +397,16 @@ const TaskTable = ({
           <StatusChip status={item.status} />
         </View>
         <View style={{ flex: 2, alignItems: 'center' }}>
-          <PriorityChip priority={item.priority} />
+          <View style={[styles.priorityBox, { backgroundColor: getPriorityColor(item.priority) + '20', borderColor: getPriorityColor(item.priority) }]}>
+            <Text style={[styles.priorityText, { color: getPriorityColor(item.priority) }]}>{item.priority}</Text>
+          </View>
         </View>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <IconButton
-            icon={item.status === 'Completed' ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-            iconColor={item.status === 'Completed' ? theme.success : '#9e9e9e'}
+            icon={item.status?.toLowerCase() === 'completed' ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
+            iconColor={item.status?.toLowerCase() === 'completed' ? theme.success : '#9e9e9e'}
             size={24}
+            disabled={isTogglingStatus}
             onPress={(e) => {
               e.stopPropagation();
               toggleTaskStatus(item);
@@ -434,218 +465,561 @@ const TaskTable = ({
       )}
 
       <Portal>
-        <Dialog visible={isDialogVisible} onDismiss={() => setIsDialogVisible(false)} style={{ borderRadius: 8 }}>
-          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.detailsTitle')}</Dialog.Title>
-          <Dialog.Content>
-            <Surface style={{ borderRadius: 8, padding: 8 }}>
-              <List.Section>
-                <List.Item
-                  title={t('taskTable.dialog.title')}
-                  description={selectedTask?.title}
-                  left={props => <List.Icon {...props} icon="format-title" />}
-                />
-                <Divider />
-                <List.Item
-                  title={t('taskTable.dialog.description')}
-                  description={selectedTask?.description || t('taskTable.dialog.noDescription')}
-                  left={props => <List.Icon {...props} icon="text-box-outline" />}
-                />
-                <Divider />
-                <List.Item
-                  title={t('taskTable.dialog.status')}
-                  description={() => (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text>{selectedTask?.status}</Text>
-                      {selectedTask && canEditTask(selectedTask) && (
-                        <Switch
-                          value={selectedTask?.status === 'Completed'}
-                          onValueChange={() => {
-                            toggleTaskStatus(selectedTask);
-                            setIsDialogVisible(false);
-                          }}
-                          color={getStatusColor('Completed')}
-                        />
-                      )}
-                    </View>
-                  )}
-                  left={props => <List.Icon {...props} icon="checkbox-marked-circle-outline" />}
-                />
-                <Divider />
-                <List.Item
-                  title={t('taskTable.dialog.priority')}
-                  description={selectedTask?.priority}
-                  left={props => <List.Icon {...props} icon="priority-high" />}
-                />
-                <Divider />
-                <List.Item
-                  title={t('taskTable.dialog.dueDate')}
-                  description={selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : t('taskTable.dialog.noDueDate')}
-                  left={props => <List.Icon {...props} icon="calendar" />}
-                />
-              </List.Section>
-            </Surface>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', paddingHorizontal: 8 }}>
-              {selectedTask && canDeleteTask(selectedTask) && (
-                <Button mode="contained" buttonColor={theme.error} onPress={() => { setIsDialogVisible(false); setIsDeleteDialogVisible(true); }}>
-                  {t('taskTable.dialog.delete')}
-                </Button>
-              )}
-              {selectedTask && canEditTask(selectedTask) && (
-                <Button mode="contained" buttonColor={theme.primary} onPress={() => { setIsDialogVisible(false); setIsEditDialogVisible(true); }}>
-                  {t('taskTable.dialog.edit')}
-                </Button>
-              )}
-              <Button mode="outlined" onPress={() => setIsDialogVisible(false)}>
-                {t('taskTable.dialog.close')}
-              </Button>
+        <Modal
+          visible={isDialogVisible}
+          onRequestClose={() => setIsDialogVisible(false)}
+          transparent={true}
+          animationType="slide"
+          statusBarTranslucent
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.modalContainer,
+              { 
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.border,
+              }
+            ]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  {t('taskTable.dialog.detailsTitle')}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => setIsDialogVisible(false)}
+                  style={[styles.closeButton, { backgroundColor: 'rgba(0, 0, 0, 0.05)' }]}
+                >
+                  <Icon name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                  <Text style={[styles.detailLabel, { color: theme.text }]}>
+                    {t('taskTable.dialog.title')}
+                  </Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {selectedTask?.title}
+                  </Text>
+                </View>
+
+                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                  <Text style={[styles.detailLabel, { color: theme.text }]}>
+                    {t('taskTable.dialog.description')}
+                  </Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {selectedTask?.description || t('taskTable.dialog.noDescription')}
+                  </Text>
+                </View>
+
+                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                  <Text style={[styles.detailLabel, { color: theme.text }]}>
+                    {t('taskTable.dialog.status')}
+                  </Text>
+                  <View style={styles.statusContainer}>
+                    <StatusChip status={selectedTask?.status} />
+                    {selectedTask && canEditTask(selectedTask) && (
+                      <Switch
+                        value={selectedTask?.status === 'Completed'}
+                        onValueChange={() => {
+                          toggleTaskStatus(selectedTask);
+                          setIsDialogVisible(false);
+                        }}
+                        trackColor={{ false: theme.border, true: getStatusColor('Completed') }}
+                        thumbColor={theme.buttonText}
+                      />
+                    )}
+                  </View>
+                </View>
+
+                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                  <Text style={[styles.detailLabel, { color: theme.text }]}>
+                    {t('taskTable.dialog.priority')}
+                  </Text>
+                  <PriorityChip priority={selectedTask?.priority} />
+                </View>
+
+                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                  <Text style={[styles.detailLabel, { color: theme.text }]}>
+                    {t('taskTable.dialog.dueDate')}
+                  </Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>
+                    {selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : t('taskTable.dialog.noDueDate')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
+                {selectedTask && canDeleteTask(selectedTask) && (
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      { 
+                        backgroundColor: theme.danger,
+                        opacity: isDeleting ? 0.7 : 1
+                      }
+                    ]}
+                    onPress={() => { 
+                      setIsDialogVisible(false); 
+                      setIsDeleteDialogVisible(true); 
+                    }}
+                  >
+                    <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+                      {t('taskTable.dialog.delete')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {selectedTask && canEditTask(selectedTask) && (
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      { 
+                        backgroundColor: theme.primary,
+                        opacity: isEditing ? 0.7 : 1
+                      }
+                    ]}
+                    onPress={() => { 
+                      setIsDialogVisible(false); 
+                      setIsEditDialogVisible(true); 
+                    }}
+                  >
+                    <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+                      {t('taskTable.dialog.edit')}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.cancelButton,
+                    { 
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  onPress={() => setIsDialogVisible(false)}
+                >
+                  <Text style={[styles.buttonText, { color: theme.text }]}>
+                    {t('taskTable.dialog.close')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </Dialog.Actions>
-        </Dialog>
-        
-        <Dialog visible={isEditDialogVisible} onDismiss={() => setIsEditDialogVisible(false)} style={{ borderRadius: 8 }}>
-          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.editTitle')}</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label={t('taskTable.input.title')}
-              value={selectedTask?.title}
-              onChangeText={(text) => setSelectedTask({ ...selectedTask, title: text })}
-              style={{ marginBottom: 8 }}
-              mode="outlined"
-            />
-            <TextInput
-              label={t('taskTable.input.description')}
-              value={selectedTask?.description}
-              onChangeText={(text) => setSelectedTask({ ...selectedTask, description: text })}
-              style={{ marginBottom: 8 }}
-              mode="outlined"
-              multiline
-            />
-            <Menu
-              visible={priorityMenuVisible}
-              onDismiss={() => setPriorityMenuVisible(false)}
-              anchor={
-                <Button mode="outlined" onPress={() => setPriorityMenuVisible(true)} style={{ marginVertical: 8 }}>
-                  {t('taskTable.input.priority')}: {selectedTask?.priority || t('taskTable.input.select')}
-                </Button>
-              }
-            >
-              <Menu.Item
-                onPress={() => {
-                  setSelectedTask({ ...selectedTask, priority: 'Low' });
-                  setPriorityMenuVisible(false);
-                }}
-                title="Low"
-              />
-              <Menu.Item
-                onPress={() => {
-                  setSelectedTask({ ...selectedTask, priority: 'Medium' });
-                  setPriorityMenuVisible(false);
-                }}
-                title="Medium"
-              />
-              <Menu.Item
-                onPress={() => {
-                  setSelectedTask({ ...selectedTask, priority: 'High' });
-                  setPriorityMenuVisible(false);
-                }}
-                title="High"
-              />
-            </Menu>
-            <TextInput
-              label={t('taskTable.input.dueDate')}
-              value={selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
-              onChangeText={(text) => setSelectedTask({ ...selectedTask, dueDate: text })}
-              style={{ marginBottom: 8 }}
-              mode="outlined"
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setIsEditDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
-            <Button mode="contained" buttonColor={theme.primary} onPress={updateTask}>{t('taskTable.dialog.save')}</Button>
-          </Dialog.Actions>
-        </Dialog>
+          </View>
+        </Modal>
 
-        <Dialog visible={isDeleteDialogVisible} onDismiss={() => setIsDeleteDialogVisible(false)} style={{ borderRadius: 8 }}>
-          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.deleteTitle')}</Dialog.Title>
-          <Dialog.Content>
-            <Text>{t('taskTable.dialog.deleteMessage', { title: selectedTask?.title })}</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setIsDeleteDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
-            <Button mode="contained" buttonColor={theme.error} onPress={deleteTask}>{t('taskTable.dialog.delete')}</Button>
-          </Dialog.Actions>
-        </Dialog>
-
-        <Dialog visible={isAddDialogVisible} onDismiss={() => setIsAddDialogVisible(false)} style={{ borderRadius: 8 }}>
-          <Dialog.Title style={{ textAlign: 'center' }}>{t('taskTable.dialog.addTitle')}</Dialog.Title>
-          <Dialog.Content>
-            <TextInput
-              label={t('taskTable.input.title')}
-              value={newTask.title}
-              onChangeText={(text) => setNewTask({ ...newTask, title: text })}
-              style={{ marginBottom: 8 }}
-              mode="outlined"
-              autoCapitalize="sentences"
-            />
-            <TextInput
-              label={t('taskTable.input.description')}
-              value={newTask.description}
-              onChangeText={(text) => setNewTask({ ...newTask, description: text })}
-              style={{ marginBottom: 8 }}
-              mode="outlined"
-              multiline
-              numberOfLines={3}
-              autoCapitalize="sentences"
-            />
-            <Menu
-              visible={priorityMenuVisible}
-              onDismiss={() => setPriorityMenuVisible(false)}
-              anchor={
-                <Button mode="outlined" onPress={() => setPriorityMenuVisible(true)} style={{ marginVertical: 8 }}>
-                  {t('taskTable.input.priority')}: {newTask.priority}
-                </Button>
+        <Modal
+          visible={isEditDialogVisible}
+          onRequestClose={() => !isEditing && setIsEditDialogVisible(false)}
+          transparent={true}
+          animationType="slide"
+          statusBarTranslucent
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.modalContainer, 
+              { 
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.border,
               }
-            >
-              <Menu.Item
-                onPress={() => {
-                  setNewTask({ ...newTask, priority: 'Low' });
-                  setPriorityMenuVisible(false);
-                }}
-                title="Low"
-              />
-              <Menu.Item
-                onPress={() => {
-                  setNewTask({ ...newTask, priority: 'Medium' });
-                  setPriorityMenuVisible(false);
-                }}
-                title="Medium"
-              />
-              <Menu.Item
-                onPress={() => {
-                  setNewTask({ ...newTask, priority: 'High' });
-                  setPriorityMenuVisible(false);
-                }}
-                title="High"
-              />
-            </Menu>
-            <TextInput
-              label={t('taskTable.input.dueDate')}
-              value={newTask.dueDate}
-              onChangeText={handleDueDateChange}
-              style={{ marginBottom: 8 }}
-              mode="outlined"
-              keyboardType="numeric"
-              maxLength={10}
-              placeholder="MM/DD/YYYY"
-            />
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setIsAddDialogVisible(false)}>{t('taskTable.dialog.cancel')}</Button>
-            <Button mode="contained" buttonColor={theme.primary} onPress={submitNewTask}>{t('taskTable.dialog.addTask')}</Button>
-          </Dialog.Actions>
-        </Dialog>
+            ]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  {t('taskTable.dialog.editTitle')}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => !isEditing && setIsEditDialogVisible(false)}
+                  disabled={isEditing}
+                  style={styles.closeButton}
+                >
+                  <Icon name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView 
+                style={styles.modalBody}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.title')}
+                </Text>
+                <TextInput
+                  value={selectedTask?.title || ''}
+                  onChangeText={text => setSelectedTask(prev => ({...prev, title: text}))}
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  placeholder={t('taskTable.input.title')}
+                  placeholderTextColor={theme.placeholder}
+                  editable={!isEditing}
+                />
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.description')}
+                </Text>
+                <TextInput
+                  value={selectedTask?.description || ''}
+                  onChangeText={text => setSelectedTask(prev => ({...prev, description: text}))}
+                  style={[
+                    styles.textInput, 
+                    styles.textArea, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  placeholder={t('taskTable.input.description')}
+                  placeholderTextColor={theme.placeholder}
+                  multiline
+                  numberOfLines={4}
+                  editable={!isEditing}
+                />
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.priority')}
+                </Text>
+                <View style={styles.priorityButtons}>
+                  {['Low', 'Medium', 'High'].map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.priorityButton,
+                        { 
+                          backgroundColor: selectedTask?.priority === p ? theme.primary : theme.inputBackground,
+                          borderColor: theme.border,
+                          opacity: isEditing ? 0.7 : 1
+                        }
+                      ]}
+                      onPress={() => !isEditing && setSelectedTask(prev => ({...prev, priority: p}))}
+                      disabled={isEditing}
+                    >
+                      <Text style={[
+                        styles.priorityButtonText,
+                        { color: selectedTask?.priority === p ? theme.buttonText : theme.text }
+                      ]}>
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.dueDate')}
+                </Text>
+                <TextInput
+                  value={selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
+                  onChangeText={text => setSelectedTask(prev => ({...prev, dueDate: text}))}
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  placeholder="MM/DD/YYYY"
+                  placeholderTextColor={theme.placeholder}
+                  keyboardType="numeric"
+                  maxLength={10}
+                  editable={!isEditing}
+                />
+              </ScrollView>
+
+              <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.button, 
+                    styles.cancelButton, 
+                    { 
+                      borderColor: theme.border,
+                      opacity: isEditing ? 0.7 : 1
+                    }
+                  ]}
+                  onPress={() => setIsEditDialogVisible(false)}
+                  disabled={isEditing}
+                >
+                  <Text style={[styles.buttonText, { color: theme.text }]}>
+                    {t('taskTable.dialog.cancel')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button, 
+                    styles.saveButton, 
+                    { 
+                      backgroundColor: theme.primary,
+                      borderColor: theme.border,
+                      borderWidth: 1,
+                      opacity: isEditing ? 0.7 : 1
+                    }
+                  ]}
+                  onPress={updateTask}
+                  disabled={isEditing}
+                >
+                  {isEditing ? (
+                    <ActivityIndicator color={theme.buttonText} size="small" />
+                  ) : (
+                    <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+                      {t('taskTable.dialog.save')}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={isDeleteDialogVisible}
+          onRequestClose={() => !isDeleting && setIsDeleteDialogVisible(false)}
+          transparent={true}
+          animationType="slide"
+          statusBarTranslucent
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.modalContainer,
+              styles.deleteModal,
+              { 
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.border,
+              }
+            ]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  {t('taskTable.dialog.deleteTitle')}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => !isDeleting && setIsDeleteDialogVisible(false)}
+                  disabled={isDeleting}
+                  style={[styles.closeButton, { backgroundColor: 'rgba(0, 0, 0, 0.05)' }]}
+                >
+                  <Icon name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <Text style={[styles.deleteMessage, { color: theme.text }]}>
+                  {t('taskTable.dialog.deleteMessage', { title: selectedTask?.title })}
+                </Text>
+              </View>
+
+              <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.cancelButton,
+                    { 
+                      borderColor: theme.border,
+                      opacity: isDeleting ? 0.7 : 1
+                    }
+                  ]}
+                  onPress={() => setIsDeleteDialogVisible(false)}
+                  disabled={isDeleting}
+                >
+                  <Text style={[styles.buttonText, { color: theme.text }]}>
+                    {t('taskTable.dialog.cancel')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    { 
+                      backgroundColor: theme.danger,
+                      borderColor: theme.danger,
+                      opacity: isDeleting ? 0.7 : 1
+                    }
+                  ]}
+                  onPress={deleteTask}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator color={theme.buttonText} size="small" />
+                  ) : (
+                    <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+                      {t('taskTable.dialog.delete')}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={isAddDialogVisible}
+          onRequestClose={() => !isSubmitting && setIsAddDialogVisible(false)}
+          transparent={true}
+          animationType="slide"
+          statusBarTranslucent
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[
+              styles.modalContainer, 
+              { 
+                backgroundColor: theme.cardBackground,
+                borderColor: theme.border,
+              }
+            ]}>
+              <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  {t('taskTable.dialog.addTitle')}
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => !isSubmitting && setIsAddDialogVisible(false)}
+                  disabled={isSubmitting}
+                  style={[styles.closeButton, { backgroundColor: 'rgba(0, 0, 0, 0.05)' }]}
+                >
+                  <Icon name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.title')}
+                </Text>
+                <TextInput
+                  value={newTask.title}
+                  onChangeText={text => setNewTask(prev => ({...prev, title: text}))}
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  placeholder={t('taskTable.input.title')}
+                  placeholderTextColor={theme.placeholder}
+                  editable={!isSubmitting}
+                  autoCapitalize="sentences"
+                  maxLength={100}
+                />
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.description')}
+                </Text>
+                <TextInput
+                  value={newTask.description}
+                  onChangeText={text => setNewTask(prev => ({...prev, description: text}))}
+                  style={[
+                    styles.textInput, 
+                    styles.textArea, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  placeholder={t('taskTable.input.description')}
+                  placeholderTextColor={theme.placeholder}
+                  multiline
+                  numberOfLines={4}
+                  editable={!isSubmitting}
+                  autoCapitalize="sentences"
+                />
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.priority')}
+                </Text>
+                <View style={styles.priorityButtons}>
+                  {['Low', 'Medium', 'High'].map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.priorityButton,
+                        { 
+                          backgroundColor: newTask.priority === p ? theme.primary : theme.inputBackground,
+                          borderColor: theme.border,
+                          opacity: isSubmitting ? 0.7 : 1
+                        }
+                      ]}
+                      onPress={() => !isSubmitting && setNewTask(prev => ({...prev, priority: p}))}
+                      disabled={isSubmitting}
+                    >
+                      <Text style={[
+                        styles.priorityButtonText,
+                        { color: newTask.priority === p ? theme.buttonText : theme.text }
+                      ]}>
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskTable.input.dueDate')}
+                </Text>
+                <TextInput
+                  value={newTask.dueDate}
+                  onChangeText={handleNewTaskDueDateChange}
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    }
+                  ]}
+                  placeholder="MM/DD/YYYY"
+                  placeholderTextColor={theme.placeholder}
+                  keyboardType="numeric"
+                  maxLength={10}
+                  editable={!isSubmitting}
+                />
+              </View>
+
+              <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
+                <TouchableOpacity
+                  style={[
+                    styles.button, 
+                    styles.cancelButton, 
+                    { 
+                      borderColor: theme.border,
+                      opacity: isSubmitting ? 0.7 : 1
+                    }
+                  ]}
+                  onPress={() => setIsAddDialogVisible(false)}
+                  disabled={isSubmitting}
+                >
+                  <Text style={[styles.buttonText, { color: theme.text }]}>
+                    {t('taskTable.dialog.cancel')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button, 
+                    styles.addButton, 
+                    { 
+                      backgroundColor: theme.primary,
+                      borderColor: theme.border,
+                      borderWidth: 1,
+                      opacity: isSubmitting ? 0.7 : 1
+                    }
+                  ]}
+                  onPress={submitNewTask}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <ActivityIndicator color={theme.buttonText} size="small" />
+                  ) : (
+                    <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+                      {t('taskTable.dialog.addTask')}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </Portal>
 
       <Snackbar
@@ -662,5 +1036,248 @@ const TaskTable = ({
     </Surface>
   );
 };
+
+const styles = StyleSheet.create({
+  dialog: {
+    borderRadius: 16,
+    marginHorizontal: 20,
+    maxHeight: '80%',
+  },
+  input: {
+    marginBottom: 16,
+  },
+  textArea: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    width: '90%',
+    backgroundColor: theme => theme.cardBackground,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalBody: {
+    padding: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 12,
+    height: 40,
+  },
+  priorityButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  priorityButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+  },
+  priorityButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  button: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+  },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  saveButton: {
+    elevation: 0,
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dialogButton: {
+    minWidth: 120,
+    marginHorizontal: 8,
+    borderRadius: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    width: '90%',
+    backgroundColor: theme => theme.cardBackground,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+  },
+  closeButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  modalBody: {
+    padding: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 12,
+    height: 40,
+  },
+  textArea: {
+    minHeight: 80,
+    height: 80,
+    textAlignVertical: 'top',
+    paddingTop: 12,
+  },
+  priorityButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  priorityButton: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+  },
+  priorityButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  button: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+  },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  addButton: {
+    elevation: 0,
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  detailItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  detailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  detailValue: {
+    fontSize: 14,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deleteModal: {
+    width: '85%',
+  },
+  deleteMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+});
 
 export default TaskTable;

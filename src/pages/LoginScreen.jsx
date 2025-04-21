@@ -1,14 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert } from 'react-native';
-import { emailLogin, googleLogin } from '../utils/authService';
+import { emailLogin } from '../utils/authService';
+import { configureGoogleSignIn } from '../utils/firebaseAuthService';
+import GoogleSignInButton from '../components/GoogleSignInButton';
 import { useTheme } from '../utils/ThemeContext';
 
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState(false);
   const [error, setError] = useState('');
   const { theme } = useTheme();
+
+  useEffect(() => {
+    const setupGoogleSignIn = async () => {
+      try {
+        const isConfigured = await configureGoogleSignIn();
+        setGoogleConfigured(isConfigured);
+        if (!isConfigured) {
+          console.warn('Google Sign-In configuration failed');
+        }
+      } catch (err) {
+        console.error('Error configuring Google Sign-In:', err);
+      }
+    };
+    
+    setupGoogleSignIn();
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -17,7 +37,7 @@ const LoginScreen = ({ navigation }) => {
     }
 
     try {
-      setLoading(true);
+      setEmailLoading(true);
       setError('');
 
       const { token, user } = await emailLogin(email, password);
@@ -28,25 +48,20 @@ const LoginScreen = ({ navigation }) => {
       console.error('Login error:', err);
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
-      setLoading(false);
+      setEmailLoading(false);
     }
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      setLoading(true);
-      setError('');
+  const handleGoogleLoginSuccess = (result) => {
+    navigation.replace('DashboardTabs');
+  };
 
-      const { token, user } = await googleLogin();
-
-      console.log('Google login successful:', user);
-      navigation.replace('DashboardTabs');
-    } catch (error) {
-      console.error('Google authentication error:', error);
-      setError(error.message || 'Google authentication failed');
-    } finally {
-      setLoading(false);
+  const handleGoogleLoginFailure = (errorMessage) => {
+    if (errorMessage.includes('cancelled')) {
+      // User cancelled, don't show error
+      return;
     }
+    setError(errorMessage);
   };
 
   return (
@@ -99,9 +114,9 @@ const LoginScreen = ({ navigation }) => {
             shadowColor: theme.shadowColor
           }]}
           onPress={handleLogin}
-          disabled={loading}
+          disabled={emailLoading}
         >
-          {loading ? (
+          {emailLoading ? (
             <ActivityIndicator color={theme.buttonText} />
           ) : (
             <Text style={[styles.buttonText, { color: theme.buttonText }]}>Login</Text>
@@ -110,15 +125,17 @@ const LoginScreen = ({ navigation }) => {
 
         <Text style={[styles.orText, { color: theme.text }]}>OR</Text>
 
-        <TouchableOpacity
-          style={[styles.button, styles.googleButton, {
-            shadowColor: theme.shadowColor
-          }]}
-          onPress={handleGoogleLogin}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>Login with Google</Text>
-        </TouchableOpacity>
+        {googleConfigured && (
+          <View style={styles.googleButtonContainer}>
+            <GoogleSignInButton
+              onLoginSuccess={handleGoogleLoginSuccess}
+              onLoginFailure={handleGoogleLoginFailure}
+              loading={googleLoading}
+              setLoading={setGoogleLoading}
+              customText="Sign in with Google"
+            />
+          </View>
+        )}
 
         <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
           <Text style={[styles.link, { color: theme.primary }]}>Create a new account</Text>
@@ -169,9 +186,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  googleButton: {
-    backgroundColor: '#db4437',
-  },
   buttonText: {
     color: '#fff',
     fontSize: 16
@@ -198,7 +212,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.8,
   },
+  googleButtonContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
 });
 
 export default LoginScreen;
-

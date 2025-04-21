@@ -44,7 +44,7 @@ const StatusButton = ({ title, color, onPress }) => (
 // Task Card Component
 const TaskCard = ({ task, theme }) => {
   const [menuVisible, setMenuVisible] = useState(false);
-  const { updateTaskStatus } = useContext(TasksContext);
+  const { updateTaskStatus, updatingTaskId } = useContext(TasksContext);
   const { t } = useTranslation();
 
   const toggleMenu = () => setMenuVisible(!menuVisible);
@@ -73,9 +73,14 @@ const TaskCard = ({ task, theme }) => {
   return (
     <Card style={[styles.taskCard, { backgroundColor: theme.taskCardBg, borderColor: theme.taskBorderColor }]}>      
       <Card.Content>
+        {updatingTaskId === task._id && (
+          <View style={[styles.loadingOverlay, { backgroundColor: `${theme.taskCardBg}CC` }]}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        )}
         <View style={styles.taskHeader}>
           <Text style={[styles.taskTitle, { color: theme.text }]}>{task.title}</Text>
-          <TouchableOpacity onPress={toggleMenu} style={styles.menuButton}>
+          <TouchableOpacity onPress={toggleMenu} style={styles.menuButton} disabled={updatingTaskId === task._id}>
             <ThreeDotsIcon color={theme.text} />
           </TouchableOpacity>
         </View>
@@ -153,7 +158,6 @@ const StatusPage = ({ route }) => {
   );
 };
 
-// Main Kanban Board Component
 const KanbanBoardMain = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
@@ -227,6 +231,7 @@ const TasksProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
   const navigation = useNavigation();
   const { t } = useTranslation();
 
@@ -276,6 +281,7 @@ const TasksProvider = ({ children }) => {
   const updateTaskStatus = async (taskId, newStatus) => {
     try {
       if (!taskId) return;
+      setUpdatingTaskId(taskId);
       const response = await axiosInstance.patch(`/tasks/${taskId}`, { status: newStatus });
       if (response.data) setTasks(prev => prev.map(t => t._id === taskId ? { ...t, status: newStatus } : t));
     } catch (error) {
@@ -284,10 +290,12 @@ const TasksProvider = ({ children }) => {
       } else {
         Alert.alert(t('tasksProvider.error', 'Error'), t('tasksProvider.failedStatusUpdate', 'Failed to update task status. Please try again.'));
       }
+    } finally {
+      setUpdatingTaskId(null);
     }
   };
 
-  return <TasksContext.Provider value={{ tasks, loading, user, teamMembers, updateTaskStatus, refreshTasks: loadUserAndFetchTasks }}>{children}</TasksContext.Provider>;
+  return <TasksContext.Provider value={{ tasks, loading, user, teamMembers, updateTaskStatus, refreshTasks: loadUserAndFetchTasks, updatingTaskId }}>{children}</TasksContext.Provider>;
 };
 
 // Stack Navigator
@@ -343,5 +351,16 @@ const styles = StyleSheet.create({
   taskListContainer: { flex: 1, padding: 16 },
   taskList: { paddingBottom: 20 },
   emptyStateContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  emptyStateText: { fontSize: 14, fontStyle: "italic" }
+  emptyStateText: { fontSize: 14, fontStyle: "italic" },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    borderRadius: 8,
+  },
 });

@@ -1,6 +1,5 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import axiosInstance from './axiosinstance';
 
 const TOKEN_KEY = '@auth_token';
@@ -123,59 +122,25 @@ export const isAuthenticated = async () => {
 
 export const logout = async () => {
   try {
+    // Import and use the Firebase signOut function
+    const { signOut: firebaseSignOut } = require('./firebaseAuthService');
+    
+    // First call the Firebase signOut to handle Google sign out properly
+    try {
+      await firebaseSignOut();
+      console.log('Firebase user signed out successfully');
+    } catch (firebaseError) {
+      console.error('Firebase sign out error:', firebaseError);
+      // Continue with local logout even if Firebase logout fails
+    }
+
+    // Clear local storage
     await AsyncStorage.removeItem(TOKEN_KEY);
     await AsyncStorage.removeItem(USER_KEY);
     delete axiosInstance.defaults.headers.common['Authorization'];
   } catch (error) {
     console.error('Logout error:', error);
     throw new Error('Failed to logout');
-  }
-};
-
-export const googleLogin = async () => {
-  try {
-    await GoogleSignin.configure({
-      webClientId: process.env.GOOGLE_CLIENT_ID,
-      offlineAccess: true,
-    });
-
-    const { idToken } = await GoogleSignin.signIn();
-
-    if (!idToken) {
-      throw new Error('Failed to get ID token from Google');
-    }
-
-    const response = await axiosInstance.post('/google', {
-      token: idToken,
-    });
-
-    if (!response.data || !response.data.token || !response.data.user) {
-      throw new Error('Invalid response from server');
-    }
-
-    const token = response.data.token;
-    const user = response.data.user;
-
-    if (!validateToken(token)) {
-      throw new Error('Invalid token received');
-    }
-
-    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-    await storeAuthData(token, user);
-    return { token, user };
-  } catch (error) {
-    console.error('Google login error:', error);
-    if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-      throw new Error('Google sign-in was cancelled');
-    } else if (error.code === statusCodes.IN_PROGRESS) {
-      throw new Error('Google sign-in is in progress');
-    } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-      throw new Error('Google Play Services are not available');
-    } else if (error.response) {
-      throw new Error(error.response.data?.message || 'Google login failed');
-    }
-    throw error;
   }
 };
 
@@ -218,30 +183,6 @@ export const verifyResetToken = async (token) => {
     console.error('Token verification error:', error);
     if (error.response) {
       throw new Error(error.response.data?.message || 'Invalid or expired reset token');
-    }
-    throw error;
-  }
-};
-
-export const resetPassword = async (token, newPassword) => {
-  try {
-    if (!token || !newPassword) {
-      throw new Error('Token and new password are required');
-    }
-
-    const response = await axiosInstance.post(`/users/reset-password/${token}`, {
-      newPassword,
-    });
-
-    if (!response.data) {
-      throw new Error('Invalid response from server');
-    }
-
-    return response.data;
-  } catch (error) {
-    console.error('Reset password error:', error);
-    if (error.response) {
-      throw new Error(error.response.data?.message || 'Password reset failed');
     }
     throw error;
   }

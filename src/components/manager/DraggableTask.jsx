@@ -5,13 +5,13 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
-import { Card, Text, Chip, useTheme as usePaperTheme } from 'react-native-paper';
+import { Card, Text, Chip, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../utils/ThemeContext';
 import { taskStyles } from '../../styles/manager';
 
-const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget }) => {
+const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAssigning }) => {
   const paperTheme = usePaperTheme();
   const { theme } = useTheme();
   const { t } = useTranslation();
@@ -71,6 +71,7 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget }) =>
       shadowOpacity: theme.dark ? 0.3 : 0.1,
       shadowRadius: 4,
       elevation: dragging ? 8 : 3,
+      opacity: isAssigning ? 0.7 : 1,
     },
     taskTitle: {
       fontSize: 16,
@@ -91,14 +92,31 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget }) =>
       fontStyle: 'italic',
       color: theme.textSecondary,
     },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.1)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 12,
+      zIndex: 1,
+    },
   });
 
   return (
     <Animated.View
       style={[styles.taskWrapper, dragging && styles.draggedTask, pan.getLayout()]}
-      {...panResponder.panHandlers}
+      {...(isAssigning ? {} : panResponder.panHandlers)}
     >
       <Card style={styles.taskCard}>
+        {isAssigning && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        )}
         <Card.Content style={styles.taskCardContent}>
           <View style={styles.taskHeader}>
             <Text style={styles.taskTitle} numberOfLines={1}>

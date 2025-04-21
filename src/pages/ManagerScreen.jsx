@@ -30,6 +30,7 @@ const ManagerScreen = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [assigningTaskId, setAssigningTaskId] = useState(null);
 
   const memberRefs = useRef({});
   const memberPositions = useRef({});
@@ -174,6 +175,7 @@ const ManagerScreen = () => {
     
     if (targetMemberId) {
       try {
+        setAssigningTaskId(taskId);
         const response = await axiosInstance.put(`/tasks/${taskId}`, {
           assignedTo: targetMemberId,
         });
@@ -214,6 +216,8 @@ const ManagerScreen = () => {
           message: t('manager.assignmentFailedMsg'),
           type: 'error',
         });
+      } finally {
+        setAssigningTaskId(null);
       }
     } else {
       addNotification({
@@ -343,6 +347,7 @@ const ManagerScreen = () => {
                     onDragEnd={handleDragEnd}
                     calculateDropTarget={calculateDropTarget}
                     theme={theme}
+                    isAssigning={assigningTaskId === (task._id || task.id)}
                   />
                 ))
               )}

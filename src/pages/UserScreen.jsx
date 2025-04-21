@@ -21,6 +21,7 @@ const UserScreen = () => {
   const [error, setError] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('all');
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
 
   const statusTabs = [
     { id: 'all', label: t('user.allTasks') },
@@ -217,49 +218,61 @@ const UserScreen = () => {
             showsVerticalScrollIndicator={false}
           >
             {filteredTasks.map(task => (
-              <TouchableOpacity key={task._id} activeOpacity={0.7}>
-                <Card style={[styles.card, { backgroundColor: theme.background }]} elevation={2}>
-                  <View style={styles.cardContent}>
-                    <View style={styles.cardLeftBorder} backgroundColor={getStatusColor(task.status)} />
-                    <View style={styles.cardMainContent}>
-                      <View style={styles.cardHeader}>
-                        <Avatar.Text
-                          size={40}
-                          label={getInitials(task.title)}
-                          style={{ backgroundColor: getPriorityColor(task.priority) }}
-                        />
-                        <View style={styles.titleContainer}>
-                          <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
-                            {task.title}
+              <Card key={task._id} style={[styles.card, { backgroundColor: theme.background }]} elevation={2}>
+                <View style={styles.cardContent}>
+                  <View style={styles.cardLeftBorder} backgroundColor={getStatusColor(task.status)} />
+                  <View style={styles.cardMainContent}>
+                    {updatingTaskId === task._id && (
+                      <View style={styles.loadingOverlay}>
+                        <ActivityIndicator size="small" color={paperTheme.colors.primary} />
+                      </View>
+                    )}
+                    <View style={styles.cardHeader}>
+                      <Avatar.Text
+                        size={40}
+                        label={getInitials(task.title)}
+                        style={{ backgroundColor: getPriorityColor(task.priority) }}
+                      />
+                      <View style={styles.titleContainer}>
+                        <Text style={[styles.taskTitle, { color: theme.text }]} numberOfLines={1}>
+                          {task.title}
+                        </Text>
+                        <View style={styles.dateContainer}>
+                          <Icon name="calendar" size={14} color={theme.textSecondary} />
+                          <Text style={[styles.dateText, { color: theme.textSecondary }]}>
+                            {formatDate(task.dueDate)}
                           </Text>
-                          <View style={styles.dateContainer}>
-                            <Icon name="calendar" size={14} color={theme.textSecondary} />
-                            <Text style={[styles.dateText, { color: theme.textSecondary }]}>
-                              {formatDate(task.dueDate)}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={[styles.statusIconContainer, { backgroundColor: getStatusColor(task.status) }]}>
-                          <Icon name={getStatusIcon(task.status)} size={16} color="#FFFFFF" />
                         </View>
                       </View>
-                      {task.description && (
-                        <Text style={[styles.description, { color: theme.text }]} numberOfLines={2}>
-                          {task.description}
-                        </Text>
-                      )}
-                      <View style={styles.cardFooter}>
-                        <Chip
-                          style={[styles.priorityChip, { backgroundColor: 'transparent', borderColor: getPriorityColor(task.priority) }]}
-                          textStyle={{ color: getPriorityColor(task.priority), fontSize: 12, fontWeight: '600' }}
-                        >
-                          {task.priority || t('user.noPriority')}
-                        </Chip>
+                      <View style={[styles.statusIconContainer, { backgroundColor: getStatusColor(task.status) }]}>
+                        <Icon name={getStatusIcon(task.status)} size={16} color="#FFFFFF" />
                       </View>
                     </View>
+                    {task.description && (
+                      <Text style={[styles.description, { color: theme.text }]} numberOfLines={2}>
+                        {task.description}
+                      </Text>
+                    )}
+                    <View style={styles.cardFooter}>
+                      <Chip
+                        style={[styles.priorityChip, { 
+                          backgroundColor: 'transparent', 
+                          borderColor: getPriorityColor(task.priority),
+                          minHeight: 32
+                        }]}
+                        textStyle={{ 
+                          color: getPriorityColor(task.priority), 
+                          fontSize: 12, 
+                          fontWeight: '600',
+                          lineHeight: 20
+                        }}
+                      >
+                        {task.priority || t('user.noPriority')}
+                      </Chip>
+                    </View>
                   </View>
-                </Card>
-              </TouchableOpacity>
+                </View>
+              </Card>
             ))}
           </ScrollView>
         )}
@@ -376,13 +389,25 @@ const styles = StyleSheet.create({
   },
   priorityChip: {
     borderWidth: 1,
-    height: 28,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 16,
   },
   emptyMessage: {
     textAlign: 'center',
     marginTop: 24,
     fontSize: 16,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+    borderRadius: 16,
   },
 });

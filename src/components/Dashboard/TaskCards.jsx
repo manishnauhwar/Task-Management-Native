@@ -4,19 +4,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
-  TextInput as RNTextInput
+  TextInput,
+  Modal,
+  ScrollView,
+  Pressable
 } from 'react-native';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   ActivityIndicator,
   FAB,
-  Modal,
+  Modal as PaperModal,
   Portal,
-  TextInput,
-  Button,
-  Menu,
-  Divider
+  TextInput as RNTextInput
 } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axiosInstance from '../../utils/axiosinstance';
@@ -31,6 +31,7 @@ const TaskCards = () => {
   const { t } = useTranslation();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [addingTask, setAddingTask] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -177,29 +178,26 @@ const TaskCards = () => {
       }
     }
     try {
-      setLoading(true);
+      setAddingTask(true);
       const newTask = {
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         priority,
         status: 'To Do',
         dueDate: formatDateForBackend(parsedDate),
         assignedTo: user.id,
         userId: user.id
       };
-      console.log('Creating task with:', JSON.stringify(newTask, null, 2));
       const response = await axiosInstance.post('/tasks/post', newTask);
       if (response.data) {
-        console.log('Task created successfully:', response.data);
         await fetchTasks(user);
         closeModal();
       }
     } catch (error) {
       console.error('Error adding task:', error);
-      console.error('Error response:', error.response?.data);
       alert(t('taskcards.failedToAddTask'));
     } finally {
-      setLoading(false);
+      setAddingTask(false);
     }
   };
 
@@ -224,16 +222,21 @@ const TaskCards = () => {
     setDueDateString(formatDateForDisplay(new Date()));
   };
 
+  const handleTitleChange = (text) => {
+    setTitle(text);
+  };
+
+  const handleDescriptionChange = (text) => {
+    setDescription(text);
+  };
+
   const handleDateChange = (text) => {
-    if (text.length === 2 && !text.includes('/')) {
-      text = `${text}/`;
-    } else if (text.length === 5 && text.charAt(2) === '/' && !text.includes('/', 3)) {
-      text = `${text}/`;
-    }
     setDueDateString(text);
-    const parsedDate = parseDisplayDate(text);
-    if (parsedDate) {
-      setDueDate(parsedDate);
+    if (text.length === 2 || text.length === 5) {
+      const shouldAddSlash = text.length === 2 || (text.length === 5 && text.charAt(2) === '/');
+      if (shouldAddSlash && !text.endsWith('/')) {
+        setDueDateString(text + '/');
+      }
     }
   };
 
@@ -280,18 +283,10 @@ const TaskCards = () => {
     inProgress: '#0ea5e9',
   };
 
-  const handleTitleChange = useCallback((text) => {
-    setTitle(text);
-  }, []);
-
-  const handleDescriptionChange = useCallback((text) => {
-    setDescription(text);
-  }, []);
-
   if (loading && tasks.length === 0) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color={theme.primaryColor || '#6366f1'} />
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
@@ -310,219 +305,228 @@ const TaskCards = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <TouchableOpacity 
-        style={[styles.addTaskButton, { borderColor: theme.borderColor }]} 
-        onPress={openModal}
-      >
-        <Icon name="plus-circle" size={24} color={theme.primaryColor || '#6366f1'} />
-        <Text style={[styles.addTaskText, { color: theme.primaryColor || '#6366f1' }]}>
-          {t('taskcards.addNewTask')}
-        </Text>
-      </TouchableOpacity>
-      <View style={styles.cardContainer}>
-        <Card style={[styles.card, { backgroundColor: cardColors.total }]}>
-          <Card.Content style={styles.cardContent}>
-            <Icon name="format-list-bulleted" size={24} color="#fff" style={styles.cardIcon} />
-            <Text style={styles.cardTitle}>{t('taskcards.totaltask')}</Text>
-            <Text style={styles.cardValue}>{totalTasks}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={[styles.card, { backgroundColor: cardColors.dueToday }]}>
-          <Card.Content style={styles.cardContent}>
-            <Icon name="calendar-today" size={24} color="#fff" style={styles.cardIcon} />
-            <Text style={styles.cardTitle}>{t('taskcards.duetoday')}</Text>
-            <Text style={styles.cardValue}>{tasksDueToday}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={[styles.card, { backgroundColor: cardColors.completed }]}>
-          <Card.Content style={styles.cardContent}>
-            <Icon name="check-circle" size={24} color="#fff" style={styles.cardIcon} />
-            <Text style={styles.cardTitle}>{t('taskcards.completed')}</Text>
-            <Text style={styles.cardValue}>{completedTasks}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={[styles.card, { backgroundColor: cardColors.overdue }]}>
-          <Card.Content style={styles.cardContent}>
-            <Icon name="clock-alert" size={24} color="#fff" style={styles.cardIcon} />
-            <Text style={styles.cardTitle}>{t('taskcards.overdue')}</Text>
-            <Text style={styles.cardValue}>{overdueTasks}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={[styles.card, { backgroundColor: cardColors.inProgress }]}>
-          <Card.Content style={styles.cardContent}>
-            <Icon name="progress-clock" size={24} color="#fff" style={styles.cardIcon} />
-            <Text style={styles.cardTitle}>{t('taskcards.inprogress')}</Text>
-            <Text style={styles.cardValue}>{inProgressTasks}</Text>
-          </Card.Content>
-        </Card>
-      </View>
+      {loading ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      ) : (
+        <>
+          <TouchableOpacity 
+            style={[styles.addTaskButton, { borderColor: theme.border }]} 
+            onPress={openModal}
+          >
+            <Icon name="plus-circle" size={24} color={theme.primary} />
+            <Text style={[styles.addTaskText, { color: theme.primary }]}>
+              {t('taskcards.addNewTask')}
+            </Text>
+          </TouchableOpacity>
+          <View style={styles.cardContainer}>
+            <Card style={[styles.card, { backgroundColor: cardColors.total }]}>
+              <Card.Content style={styles.cardContent}>
+                <Icon name="format-list-bulleted" size={24} color="#fff" style={styles.cardIcon} />
+                <Text style={styles.cardTitle}>{t('taskcards.totaltask')}</Text>
+                <Text style={styles.cardValue}>{totalTasks}</Text>
+              </Card.Content>
+            </Card>
+            <Card style={[styles.card, { backgroundColor: cardColors.dueToday }]}>
+              <Card.Content style={styles.cardContent}>
+                <Icon name="calendar-today" size={24} color="#fff" style={styles.cardIcon} />
+                <Text style={styles.cardTitle}>{t('taskcards.duetoday')}</Text>
+                <Text style={styles.cardValue}>{tasksDueToday}</Text>
+              </Card.Content>
+            </Card>
+            <Card style={[styles.card, { backgroundColor: cardColors.completed }]}>
+              <Card.Content style={styles.cardContent}>
+                <Icon name="check-circle" size={24} color="#fff" style={styles.cardIcon} />
+                <Text style={styles.cardTitle}>{t('taskcards.completed')}</Text>
+                <Text style={styles.cardValue}>{completedTasks}</Text>
+              </Card.Content>
+            </Card>
+            <Card style={[styles.card, { backgroundColor: cardColors.overdue }]}>
+              <Card.Content style={styles.cardContent}>
+                <Icon name="clock-alert" size={24} color="#fff" style={styles.cardIcon} />
+                <Text style={styles.cardTitle}>{t('taskcards.overdue')}</Text>
+                <Text style={styles.cardValue}>{overdueTasks}</Text>
+              </Card.Content>
+            </Card>
+            <Card style={[styles.card, { backgroundColor: cardColors.inProgress }]}>
+              <Card.Content style={styles.cardContent}>
+                <Icon name="progress-clock" size={24} color="#fff" style={styles.cardIcon} />
+                <Text style={styles.cardTitle}>{t('taskcards.inprogress')}</Text>
+                <Text style={styles.cardValue}>{inProgressTasks}</Text>
+              </Card.Content>
+            </Card>
+          </View>
+        </>
+      )}
 
-      <Portal>
-        <Modal
-          visible={modalVisible}
-          onDismiss={closeModal}
-          contentContainerStyle={[
+      <Modal
+        visible={modalVisible}
+        onRequestClose={() => !addingTask && closeModal()}
+        transparent={true}
+        animationType="slide"
+        statusBarTranslucent
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[
             styles.modalContainer, 
             { 
               backgroundColor: theme.cardBackground,
-              borderColor: theme.borderColor,
-              shadowColor: theme.shadowColor || 'rgba(0, 0, 0, 0.1)'
+              borderColor: theme.border,
             }
-          ]}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.headingText }]}>
-              {t('taskcards.addNewTask')}
-            </Text>
-            <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-              <Icon name="close" size={24} color={theme.text} />
-            </TouchableOpacity>
-          </View>
-          
-          <Divider style={[styles.divider, { backgroundColor: theme.borderColor }]} />
-          
-          <View style={styles.modalBody}>
-            <TextInput
-              label={t('taskcards.titleLabel')}
-              value={title}
-              onChangeText={handleTitleChange}
-              style={styles.input}
-              mode="outlined"
-              autoCapitalize="sentences"
-              autoCorrect={false}
-              outlineColor={theme.inputBorder}
-              activeOutlineColor={theme.primaryColor}
-              textColor={theme.text}
-              theme={{ colors: { text: theme.text, placeholder: theme.placeholderText } }}
-            />
-            
-            <TextInput
-              label={t('taskcards.descriptionLabel')}
-              value={description}
-              onChangeText={handleDescriptionChange}
-              style={[styles.input, styles.textArea]}
-              mode="outlined"
-              multiline
-              numberOfLines={4}
-              autoCapitalize="sentences"
-              autoCorrect={false}
-              outlineColor={theme.inputBorder}
-              activeOutlineColor={theme.primaryColor}
-              textColor={theme.text}
-              theme={{ colors: { text: theme.text, placeholder: theme.placeholderText } }}
-            />
-            
-            <View style={styles.priorityContainer}>
-              <Text style={[styles.sectionLabel, { color: theme.text }]}>
+          ]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                {t('taskcards.addNewTask')}
+              </Text>
+              <TouchableOpacity 
+                onPress={closeModal} 
+                disabled={addingTask}
+                style={styles.closeButton}
+              >
+                <Icon name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={[styles.inputLabel, { color: theme.text }]}>
+                {t('taskcards.titleLabel')}
+              </Text>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                style={[
+                  styles.textInput, 
+                  { 
+                    backgroundColor: theme.inputBackground,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  }
+                ]}
+                placeholder={t('taskcards.titleLabel')}
+                placeholderTextColor={theme.placeholderText}
+                editable={!addingTask}
+                autoCapitalize="sentences"
+                maxLength={100}
+              />
+
+              <Text style={[styles.inputLabel, { color: theme.text }]}>
+                {t('taskcards.descriptionLabel')}
+              </Text>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                style={[
+                  styles.textInput, 
+                  styles.textArea, 
+                  { 
+                    backgroundColor: theme.inputBackground,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  }
+                ]}
+                placeholder={t('taskcards.descriptionLabel')}
+                placeholderTextColor={theme.placeholderText}
+                multiline
+                numberOfLines={4}
+                editable={!addingTask}
+                autoCapitalize="sentences"
+              />
+
+              <Text style={[styles.inputLabel, { color: theme.text }]}>
                 {t('taskcards.priorityLabel')}
               </Text>
-              
-              <Menu
-                visible={priorityMenuVisible}
-                onDismiss={togglePriorityMenu}
-                contentStyle={{ backgroundColor: theme.cardBackground }}
-                anchor={
-                  <TouchableOpacity 
+              <View style={styles.priorityButtons}>
+                {['Low', 'Medium', 'High'].map((p) => (
+                  <TouchableOpacity
+                    key={p}
                     style={[
-                      styles.dropdownButton, 
+                      styles.priorityButton,
                       { 
-                        borderColor: theme.inputBorder,
-                        backgroundColor: theme.inputBackground || 'transparent'
+                        backgroundColor: priority === p ? theme.primary : theme.inputBackground,
+                        borderColor: theme.border,
+                        opacity: addingTask ? 0.7 : 1
                       }
-                    ]} 
-                    onPress={togglePriorityMenu}
+                    ]}
+                    onPress={() => !addingTask && setPriority(p)}
+                    disabled={addingTask}
                   >
-                    <View style={styles.priorityBadgeContainer}>
-                      <View 
-                        style={[
-                          styles.priorityBadge, 
-                          { backgroundColor: getPriorityColor(priority) }
-                        ]} 
-                      />
-                      <Text style={[styles.dropdownButtonText, { color: theme.text }]}>
-                        {priority}
-                      </Text>
-                    </View>
-                    <Icon name="chevron-down" size={20} color={theme.iconColor || theme.text} />
+                    <Text style={[
+                      styles.priorityButtonText,
+                      { color: priority === p ? theme.buttonText : theme.text }
+                    ]}>
+                      {p}
+                    </Text>
                   </TouchableOpacity>
-                }
-              >
-                <Menu.Item 
-                  onPress={() => { setPriority('High'); togglePriorityMenu(); }} 
-                  title="High" 
-                  titleStyle={{ color: theme.text }}
-                  leadingIcon="flag"
-                />
-                <Menu.Item 
-                  onPress={() => { setPriority('Medium'); togglePriorityMenu(); }} 
-                  title="Medium" 
-                  titleStyle={{ color: theme.text }}
-                  leadingIcon="flag"
-                />
-                <Menu.Item 
-                  onPress={() => { setPriority('Low'); togglePriorityMenu(); }} 
-                  title="Low" 
-                  titleStyle={{ color: theme.text }}
-                  leadingIcon="flag"
-                />
-              </Menu>
-            </View>
-            
-            <View style={styles.dateSection}>
-              <Text style={[styles.sectionLabel, { color: theme.text }]}>
+                ))}
+              </View>
+
+              <Text style={[styles.inputLabel, { color: theme.text }]}>
                 {t('taskcards.dueDateLabel')}
               </Text>
-              
-              <View style={[
-                styles.dateInputContainer,
-                { 
-                  borderColor: theme.inputBorder,
-                  backgroundColor: theme.inputBackground || 'transparent'
-                }
-              ]}>
-                <RNTextInput
-                  style={[styles.dateInput, { color: theme.text }]}
-                  value={dueDateString}
-                  onChangeText={handleDateChange}
-                  placeholder="MM/DD/YYYY"
-                  placeholderTextColor={theme.placeholderText}
-                  keyboardType="numeric"
-                  maxLength={10}
-                />
-                <Icon 
-                  name="calendar" 
-                  size={20} 
-                  color={theme.primaryColor || '#6366f1'} 
-                  style={styles.dateInputIcon} 
-                />
-              </View>
+              <TextInput
+                style={[
+                  styles.textInput, 
+                  { 
+                    backgroundColor: theme.inputBackground,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  }
+                ]}
+                value={dueDateString}
+                onChangeText={handleDateChange}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor={theme.placeholderText}
+                keyboardType="numeric"
+                maxLength={10}
+                editable={!addingTask}
+              />
+            </View>
+
+            <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
+              <TouchableOpacity 
+                style={[
+                  styles.button, 
+                  styles.cancelButton, 
+                  { 
+                    borderColor: theme.border,
+                    opacity: addingTask ? 0.7 : 1
+                  }
+                ]} 
+                onPress={closeModal}
+                disabled={addingTask}
+              >
+                <Text style={[styles.buttonText, { color: theme.text }]}>
+                  {t('taskcards.cancel')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.button, 
+                  styles.addButton, 
+                  { 
+                    backgroundColor: theme.primary,
+                    borderColor: theme.border,
+                    borderWidth: 1,
+                    opacity: addingTask ? 0.7 : 1
+                  }
+                ]} 
+                onPress={handleAddTask}
+                disabled={addingTask}
+              >
+                {addingTask ? (
+                  <ActivityIndicator color={theme.buttonText} size="small" />
+                ) : (
+                  <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+                    {t('taskcards.addTask')}
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-          
-          <Divider style={[styles.divider, { backgroundColor: theme.borderColor }]} />
-          
-          <View style={styles.buttonContainer}>
-            <Button 
-              mode="outlined" 
-              onPress={closeModal} 
-              style={[styles.cancelButton, { borderColor: theme.borderColor }]} 
-              labelStyle={[styles.buttonLabelCancel, { color: theme.text }]}
-              textColor={theme.text}
-            >
-              {t('taskcards.cancel')}
-            </Button>
-            
-            <Button 
-              mode="contained" 
-              onPress={handleAddTask} 
-              style={[styles.addButton, { backgroundColor: theme.primaryColor || '#6366f1' }]} 
-              labelStyle={styles.buttonLabel}
-            >
-              {t('taskcards.addTask')}
-            </Button>
-          </View>
-        </Modal>
-      </Portal>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -584,117 +588,107 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
   },
-  // Modal Styles - Enhanced
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
   modalContainer: {
-    margin: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
+    width: '90%',
+    backgroundColor: theme => theme.cardBackground,
+    borderRadius: 20,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 5,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    padding: 16,
+    borderBottomWidth: 1,
   },
   closeButton: {
-    padding: 5,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   modalBody: {
-    padding: 20,
+    padding: 16,
   },
-  input: {
-    marginBottom: 16,
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    marginBottom: 12,
+    height: 40,
   },
   textArea: {
-    height: 120,
+    minHeight: 80,
+    height: 80,
+    textAlignVertical: 'top',
+    paddingTop: 12,
   },
-  priorityContainer: {
-    marginBottom: 16,
-  },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  dropdownButton: {
+  priorityButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    height: 50,
-  },
-  priorityBadgeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  priorityBadge: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  dropdownButtonText: {
-    fontSize: 16,
-  },
-  dateSection: {
     marginBottom: 16,
+    gap: 8,
   },
-  dateInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingLeft: 12,
-    paddingRight: 12,
-    height: 50,
-  },
-  dateInput: {
+  priorityButton: {
     flex: 1,
-    fontSize: 16,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
   },
-  dateInputIcon: {
-    marginLeft: 10,
-  },
-  divider: {
-    height: 1,
+  priorityButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 20,
-    paddingTop: 10,
+    padding: 16,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  button: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
   },
   cancelButton: {
-    flex: 0.48,
     borderWidth: 1,
   },
   addButton: {
-    flex: 0.48,
+    elevation: 0,
   },
-  buttonLabel: {
+  buttonText: {
     fontSize: 16,
-    fontWeight: '500',
-    paddingVertical: 2,
-  },
-  buttonLabelCancel: {
-    fontSize: 16,
-    fontWeight: '500',
-    paddingVertical: 2,
+    fontWeight: '600',
   },
 });
 

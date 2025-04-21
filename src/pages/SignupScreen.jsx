@@ -9,24 +9,25 @@ import {
   ActivityIndicator,
   Alert
 } from 'react-native';
-import { emailSignup, googleLogin } from '../utils/authService';
+import { emailSignup } from '../utils/authService';
+// import { googleSignIn } from '../utils/googleAuthService';
 import { useTheme } from '../utils/ThemeContext';
+// import GoogleSignInButton from '../components/GoogleSignInButton';
 
 const SignupScreen = ({ navigation }) => {
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [emailLoading, setEmailLoading] = useState(false);
+  // const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors]     = useState({
     name: '', email: '', password: '', general: ''
   });
   const { theme } = useTheme();
 
-  // Ref to avoid setting state after unmount
   const isMounted = useRef(true);
   useEffect(() => () => { isMounted.current = false; }, []);
 
-  // Normalize name: trim + collapse spaces
   const normalizeName = input =>
     input.trim().replace(/\s+/g, ' ');
 
@@ -78,14 +79,12 @@ const SignupScreen = ({ navigation }) => {
     !validateEmail(email) &&
     !validatePassword(password);
 
-  // --- Handlers ---
   const handleSignup = async () => {
-    // Never call API unless client-side validation passes
     if (!validateAllInputs()) return;
 
     if (isMounted.current) {
       setErrors(prev => ({ ...prev, general: '' }));
-      setLoading(true);
+      setEmailLoading(true);
     }
 
     try {
@@ -101,7 +100,6 @@ const SignupScreen = ({ navigation }) => {
       }
     } catch (err) {
       if (!isMounted.current) return;
-      // Merge backend error messages into your errors state
       const updated = { ...errors };
       const msg = err.response?.data?.message || err.message || 'Signup failed';
 
@@ -120,31 +118,17 @@ const SignupScreen = ({ navigation }) => {
 
       setErrors(updated);
     } finally {
-      if (isMounted.current) setLoading(false);
+      if (isMounted.current) setEmailLoading(false);
     }
   };
 
-  const handleGoogleSignup = async () => {
-    if (isMounted.current) {
-      setErrors(prev => ({ ...prev, general: '' }));
-      setLoading(true);
-    }
+  // const handleGoogleLoginSuccess = (result) => {
+  //   navigation.navigate('Home');
+  // };
 
-    try {
-      const { user } = await googleLogin();
-      navigation.replace('DashboardTabs');
-    } catch (err) {
-      if (!isMounted.current) return;
-      const fallback = err.message?.includes('cancelled')
-        ? 'Google sign-in was cancelled.'
-        : err.message?.includes('network')
-          ? 'Network error. Please check your connection.'
-          : 'Google signup failed. Please try again later.';
-      setErrors(prev => ({ ...prev, general: fallback }));
-    } finally {
-      if (isMounted.current) setLoading(false);
-    }
-  };
+  // const handleGoogleLoginFailure = (errorMessage) => {
+  //   setErrors(prev => ({ ...prev, general: errorMessage }));
+  // };
 
   // --- Render ---
   return (
@@ -245,31 +229,28 @@ const SignupScreen = ({ navigation }) => {
             {
               backgroundColor: theme.primary,
               shadowColor: theme.shadowColor,
-              opacity: loading || !isFormValid ? 0.6 : 1
+              opacity: emailLoading || !isFormValid ? 0.6 : 1
             }
           ]}
           onPress={handleSignup}
-          disabled={loading || !isFormValid}
+          disabled={emailLoading || !isFormValid}
         >
-          {loading
+          {emailLoading
             ? <ActivityIndicator color={theme.buttonText} />
             : <Text style={[styles.buttonText, { color: theme.buttonText }]}>Sign Up</Text>
           }
         </TouchableOpacity>
 
-        <Text style={[styles.orText, { color: theme.text }]}>OR</Text>
+        {/* <Text style={[styles.orText, { color: theme.text }]}>OR</Text> */}
 
         {/* Google Signup */}
-        <TouchableOpacity
-          style={[styles.button, styles.googleButton, { shadowColor: theme.shadowColor }]}
-          onPress={handleGoogleSignup}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>Sign up with Google</Text>
-          }
-        </TouchableOpacity>
+        {/* <GoogleSignInButton
+          onLoginSuccess={handleGoogleLoginSuccess}
+          onLoginFailure={handleGoogleLoginFailure}
+          loading={googleLoading}
+          setLoading={setGoogleLoading}
+          customText="Sign up with Google"
+        /> */}
 
         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
           <Text style={[styles.link, { color: theme.primary }]}>

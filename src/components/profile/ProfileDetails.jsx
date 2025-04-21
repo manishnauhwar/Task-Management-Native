@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, Text, View, TouchableOpacity,
-  Modal, TextInput, Image, Alert
+  Modal, TextInput, Image, Alert, ActivityIndicator
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as ImagePicker from 'react-native-image-picker';
@@ -9,23 +9,55 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../../utils/axiosinstance';
 import { useTranslation } from 'react-i18next';
 
+const baseURL = 'https://taskmanagement-backend-2.onrender.com';
+// const baseURL = 'http://10.0.2.2:5000';
+
 const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
-  const [profilePicture, setProfilePicture] = useState(user.profilePictureUrl);
+  const [loading, setLoading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [profilePicture, setProfilePicture] = useState(null);
   const [editData, setEditData] = useState({
-    fullname: user.fullname, email: user.email, password: ''
+    fullname: '', email: '', password: ''
   });
+  
+  useEffect(() => {
+    if (user) {
+      if (user.googleProfilePictureUrl) {
+        setProfilePicture(user.googleProfilePictureUrl);
+      } else if (user.profilePictureUrl) {
+        setProfilePicture(`${baseURL}${user.profilePictureUrl}`);
+      } else {
+        setProfilePicture(null);
+      }
+      
+      setEditData({
+        fullname: user.fullname || '',
+        email: user.email || '',
+        password: ''
+      });
+    }
+  }, [user]);
 
   const editDetail = async () => {
-    setModalOpen(false);
     if (!editData.fullname || !editData.email) {
       return Alert.alert(t('common.error'), t('profile.requiredFields'));
     }
     try {
+      setLoading(true);
       const updateData = { fullname: editData.fullname, email: editData.email };
       if (editData.password.trim()) updateData.password = editData.password;
-      const res = await axiosInstance.put(`/users/${user.id}`, updateData);
+      
+      // Make sure we have a valid user ID
+      const userId = user.id || user._id;
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+      
+      console.log('Updating user details for ID:', userId);
+      
+      const res = await axiosInstance.put(`/users/${userId}`, updateData);
       if (res.status === 200) {
         const updatedUser = { ...user, ...updateData };
         const stored = await AsyncStorage.getItem('@user_data');
@@ -35,12 +67,13 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
             JSON.stringify({ ...pd, ...updateData })
           );
         }
-        setEditData(prev=>({...prev,password:''}));
+        setEditData(prev => ({ ...prev, password: '' }));
         onProfileUpdate(updatedUser);
+        setModalOpen(false);
         Alert.alert(t('common.success'), t('profile.profileUpdated'));
       }
     } catch (err) {
-      console.error(err);
+      console.error('Profile update error:', err);
       const st = err.response?.status;
       if (st === 400) {
         Alert.alert(t('common.error'), t('profile.invalidData'));
@@ -51,12 +84,25 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
       } else {
         Alert.alert(t('common.error'), t('profile.profileUpdateError'));
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleImagePicker = () => {
+    // Check if this is a Google user
+    const isGoogleUser = !!user.googleProfilePictureUrl;
+    
+    if (isGoogleUser) {
+      return Alert.alert(
+        t('common.info'),
+        t('profile.googleProfilePictureInfo'),
+        [{ text: t('common.ok'), style: 'default' }]
+      );
+    }
+    
     ImagePicker.launchImageLibrary({
-      mediaType: 'photo', maxHeight:500, maxWidth:500, quality:0.7,
+      mediaType: 'photo', maxHeight: 500, maxWidth: 500, quality: 0.7,
     }, async (res) => {
       if (res.didCancel) {
         return console.log('User cancelled image picker');
@@ -70,66 +116,110 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
         return Alert.alert(t('common.error'), t('profile.noImage'));
       }
       try {
+        setImageLoading(true);
         const fd = new FormData();
         fd.append('profilePicture', {
           uri: asset.uri, type: asset.type, name: asset.fileName
         });
+        
+        // Make sure we have a valid user ID
+        const userId = user.id || user._id;
+        
+        if (!userId) {
+          throw new Error('User ID not found');
+        }
+        
+        console.log('Uploading profile picture for user ID:', userId);
+        
         const up = await axiosInstance.post(
-          `/users/${user.id}/profile-picture`, fd,
-          { headers:{ 'Content-Type':'multipart/form-data' }}
+          `/users/${userId}/profile-picture`, fd,
+          { headers: { 'Content-Type': 'multipart/form-data' }}
         );
-        const url = up.data.profilePictureUrl + '?t=' + Date.now();
-        setProfilePicture(url);
-        // sync storage + parent
-        const pu = { ...user, profilePictureUrl: url };
+        
+        const newProfilePictureUrl = up.data.profilePictureUrl 
+          ? `${baseURL}${up.data.profilePictureUrl}` 
+          : null;
+        
+        setProfilePicture(newProfilePictureUrl);
+
+        const pu = { 
+          ...user,
+          profilePictureUrl: up.data.profilePictureUrl 
+        };
+        
         const st = await AsyncStorage.getItem('@user_data');
         if (st) {
           const pd = JSON.parse(st);
           await AsyncStorage.setItem('@user_data',
-            JSON.stringify({ ...pd, profilePictureUrl: url })
+            JSON.stringify({ 
+              ...pd,
+              profilePictureUrl: up.data.profilePictureUrl 
+            })
           );
         }
         onProfileUpdate(pu);
         Alert.alert(t('common.success'), t('profile.profilePictureUpdated'));
       } catch (e) {
-        console.error(e);
+        console.error('Profile picture upload error:', e);
         Alert.alert(t('common.error'), t('profile.uploadError'));
+      } finally {
+        setImageLoading(false);
       }
     });
   };
 
+  // Check if user data is available
+  if (!user || !user.fullname) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={[styles.text, { color: theme.text }]}>
+          {t('profile.noUserDataAvailable')}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <>
-      <Text style={[styles.sectionTitle, { color:theme.text }]}>
+      <Text style={[styles.sectionTitle, { color: theme.text }]}>
         {t('profile.userDetails')}
       </Text>
       <View style={[styles.contentCard, {
         backgroundColor: theme.inputBackground,
         borderColor: theme.border,
       }]}>
-        <TouchableOpacity onPress={handleImagePicker} style={styles.profilePictureContainer}>
-          {profilePicture
-            ? <Image source={{ uri:profilePicture }} style={styles.profilePicture} />
-            : <Icon name="account-circle" size={100} color={theme.text} />
-          }
-          <View style={[styles.cameraIconContainer, { backgroundColor:theme.primary }]}>
+        <TouchableOpacity onPress={handleImagePicker} style={styles.profilePictureContainer} disabled={imageLoading}>
+          {imageLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
+          ) : profilePicture ? (
+            <Image source={{ uri: profilePicture }} style={styles.profilePicture} />
+          ) : (
+            <Icon name="account-circle" size={100} color={theme.text} />
+          )}
+          <View style={[styles.cameraIconContainer, { backgroundColor: theme.primary }]}>
             <Icon name="camera-alt" size={20} color={theme.buttonText} />
           </View>
         </TouchableOpacity>
-        <Text style={[styles.text, { color:theme.text }]}>
+        <Text style={[styles.text, { color: theme.text }]}>
           {t('profile.name')}: {user.fullname}
         </Text>
-        <Text style={[styles.text, { color:theme.text }]}>
+        <Text style={[styles.text, { color: theme.text }]}>
           {t('profile.email')}: {user.email}
         </Text>
-        <Text style={[styles.text, { color:theme.text }]}>
+        <Text style={[styles.text, { color: theme.text }]}>
           {t('profile.role')}: {user.role}
         </Text>
         <TouchableOpacity
-          style={[styles.button,{ backgroundColor:theme.primary }]}
-          onPress={()=>setModalOpen(true)}
+          style={[styles.button, { 
+            backgroundColor: theme.primary,
+            opacity: loading ? 0.7 : 1 
+          }]}
+          onPress={() => setModalOpen(true)}
+          disabled={loading}
         >
-          <Text style={[styles.buttonText,{ color:theme.buttonText }]}>
+          <Text style={[styles.buttonText, { color: theme.buttonText }]}>
             {t('profile.editProfile')}
           </Text>
         </TouchableOpacity>
@@ -137,58 +227,77 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
 
       <Modal visible={modalOpen} animationType="slide" transparent>
         <View style={styles.modalWrapper}>
-          <View style={[styles.modalContent,{ backgroundColor:theme.cardBackground }]}>
-            <Text style={[styles.modalTitle,{ color:theme.text }]}>
+          <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>
               {t('profile.editProfile')}
             </Text>
             <TextInput
-              style={[styles.input,{
-                backgroundColor:theme.inputBackground,
-                borderColor:theme.border, color:theme.text
+              style={[styles.input, {
+                backgroundColor: theme.inputBackground,
+                borderColor: theme.border, color: theme.text
               }]}
               placeholder={t('profile.name')}
               value={editData.fullname}
-              onChangeText={text=>setEditData(p=>({...p,fullname:text}))}
+              onChangeText={text => setEditData(p => ({ ...p, fullname: text }))}
               placeholderTextColor={theme.placeholder}
+              editable={!loading}
             />
             <TextInput
-              style={[styles.input,{
-                backgroundColor:theme.inputBackground,
-                borderColor:theme.border, color:theme.text
+              style={[styles.input, {
+                backgroundColor: theme.inputBackground,
+                borderColor: theme.border, color: theme.text
               }]}
               placeholder={t('profile.email')}
               value={editData.email}
-              onChangeText={text=>setEditData(p=>({...p,email:text}))}
+              onChangeText={text => setEditData(p => ({ ...p, email: text }))}
               placeholderTextColor={theme.placeholder}
+              editable={!loading}
             />
             <TextInput
-              style={[styles.input,{
-                backgroundColor:theme.inputBackground,
-                borderColor:theme.border, color:theme.text
+              style={[styles.input, {
+                backgroundColor: theme.inputBackground,
+                borderColor: theme.border, color: theme.text
               }]}
               placeholder="New Password (leave empty to keep current)"
               secureTextEntry
               value={editData.password}
-              onChangeText={text=>setEditData(p=>({...p,password:text}))}
+              onChangeText={text => setEditData(p => ({ ...p, password: text }))}
               placeholderTextColor={theme.placeholder}
+              editable={!loading}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton,{ backgroundColor:theme.primary }]}
+                style={[styles.modalButton, { 
+                  backgroundColor: theme.primary,
+                  opacity: loading ? 0.7 : 1
+                }]}
                 onPress={editDetail}
+                disabled={loading}
               >
-                <Text style={[styles.modalButtonText,{ color:theme.buttonText }]}>
-                  {t('common.save')}
-                </Text>
+                {loading ? (
+                  <ActivityIndicator size="small" color={theme.buttonText} />
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
+                    {t('common.save')}
+                  </Text>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.cancelModalButton,{ backgroundColor:theme.danger }]}
-                onPress={()=>{
+                style={[styles.cancelModalButton, { 
+                  backgroundColor: theme.danger,
+                  opacity: loading ? 0.7 : 1
+                }]}
+                onPress={() => {
                   setModalOpen(false);
-                  setEditData({ fullname:user.fullname, email:user.email, password:'' });
+                  setEditData({
+                    fullname: user.fullname || '',
+                    email: user.email || '',
+                    password: ''
+                  });
                 }}
+                disabled={loading}
               >
-                <Text style={[styles.modalButtonText,{ color:theme.buttonText }]}>
+                <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
                   {t('common.cancel')}
                 </Text>
               </TouchableOpacity>
@@ -307,6 +416,14 @@ const styles = StyleSheet.create({
   modalButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  loadingContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center'
   },
 });
 

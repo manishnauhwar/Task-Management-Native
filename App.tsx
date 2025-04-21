@@ -8,6 +8,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { NotificationProvider } from './src/utils/NotificationContext';
 import { ThemeProvider, useTheme } from './src/utils/ThemeContext';
 import { Provider as PaperProvider, DefaultTheme } from 'react-native-paper';
+import { getApps } from '@react-native-firebase/app';
 
 import LoginScreen from './src/pages/LoginScreen';
 import SignupScreen from './src/pages/SignupScreen';
@@ -158,6 +159,14 @@ const App = () => {
       secondary: '#6c757d',
     },
   };
+
+  // Initialize Firebase
+  useEffect(() => {
+    // Check if Firebase is already initialized using modular API
+    if (getApps().length) {
+      console.log('Firebase initialized');
+    }
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

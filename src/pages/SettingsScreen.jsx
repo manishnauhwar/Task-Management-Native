@@ -13,7 +13,7 @@ import {
 import { useTheme } from '../utils/ThemeContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
-import i18n, { saveLanguage } from '../i18n';
+import i18n, { saveLanguage, loadSavedLanguage } from '../i18n';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../utils/axiosinstance';
@@ -33,7 +33,6 @@ const SettingsScreen = () => {
     { label: 'Hindi', code: 'hi' },
   ];
 
-  // Save dark mode preference to AsyncStorage
   const handleThemeChange = async (value) => {
     setIsDarkMode(value);
     try {
@@ -43,69 +42,64 @@ const SettingsScreen = () => {
     }
   };
 
-  // Handle language selection
   const handleLanguageChange = async (language) => {
     setSelectedLanguage(language.code);
     await saveLanguage(language.code);
     setShowLanguageModal(false);
   };
 
-  // Update notification preferences on the backend and locally
   const updateNotificationPreferences = async (type, value) => {
     try {
       await axiosInstance.patch('/notifications/preferences', { [type]: value });
-      // Also save to AsyncStorage
+    
       await AsyncStorage.setItem(`notification_${type}`, JSON.stringify(value));
     } catch (error) {
       console.error('Failed to update notification preferences:', error.message);
+      await AsyncStorage.setItem(`notification_${type}`, JSON.stringify(value));
     }
   };
 
-  // Fetch current preferences on component mount
   useEffect(() => {
-    const loadStoredPreferences = async () => {
+    const loadAllPreferences = async () => {
       try {
-        // Load theme preference
-        const storedTheme = await AsyncStorage.getItem('isDarkMode');
-        if (storedTheme !== null) {
-          setIsDarkMode(JSON.parse(storedTheme));
-        }
+        await loadSavedLanguage();
+        setSelectedLanguage(i18n.language);
 
-        // Load notification preferences from local storage first
         const storedEmailPref = await AsyncStorage.getItem('notification_email');
         const storedAppPref = await AsyncStorage.getItem('notification_inApp');
+        const storedDarkMode = await AsyncStorage.getItem('isDarkMode');
+        
+        if (storedDarkMode !== null) {
+          setIsDarkMode(JSON.parse(storedDarkMode));
+        }
         
         if (storedEmailPref !== null) {
           setEmailNotifications(JSON.parse(storedEmailPref));
         }
-        
         if (storedAppPref !== null) {
           setAppNotifications(JSON.parse(storedAppPref));
         }
 
-        // Then try to fetch from API to ensure we have the latest
         try {
           const res = await axiosInstance.get('/notifications/preferences');
           const prefs = res.data.preferences;
+          
           setEmailNotifications(prefs.email);
           setAppNotifications(prefs.inApp);
-          
-          // Update local storage with latest from API
           await AsyncStorage.setItem('notification_email', JSON.stringify(prefs.email));
           await AsyncStorage.setItem('notification_inApp', JSON.stringify(prefs.inApp));
         } catch (apiError) {
           console.error('Error fetching notification preferences:', apiError.message);
-          // Continue using locally stored preferences if API fails
+         
         }
       } catch (error) {
-        console.error('Error loading stored preferences:', error.message);
+        console.error('Error loading preferences:', error.message);
       }
     };
 
-    loadStoredPreferences();
-  }, [setIsDarkMode]);
+    loadAllPreferences();
+  }, []);
 
-  // Reusable render function for setting items
   const renderSettingItem = (title, description, value, onValueChange) => (
     <View style={[styles.settingCard, { backgroundColor: theme.cardBackground }]}>
       <View style={styles.settingContent}>
@@ -141,7 +135,7 @@ const SettingsScreen = () => {
           t('settings.darkMode'),
           t('settings.darkModeDesc'),
           isDarkMode,
-          handleThemeChange // Use the new handler that saves to AsyncStorage
+          handleThemeChange 
         )}
 
         {/* Notification Preferences */}

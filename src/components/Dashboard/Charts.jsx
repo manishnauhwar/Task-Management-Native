@@ -17,7 +17,7 @@ const Charts = () => {
   const { t } = useTranslation();
   const [tasks, setTasks] = useState([]);
   const [monthlyStats, setMonthlyStats] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [error, setError] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -36,10 +36,8 @@ const Charts = () => {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
       const currentUser = await loadUser();
       if (!currentUser) {
-        setLoading(false);
         return;
       }
       const tasksResponse = await axiosInstance.get('/tasks');
@@ -88,8 +86,6 @@ const Charts = () => {
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Failed to load tasks');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -137,9 +133,6 @@ const Charts = () => {
   useFocusEffect(
     useCallback(() => {
       fetchData();
-      return () => {
-        
-      };
     }, [])
   );
 
@@ -220,10 +213,6 @@ const Charts = () => {
       return t('charts.myTasksAnalytics');
     }
   };
-
-  if (loading) {
-    return <ActivityIndicator style={styles.loader} size="large" color={paperTheme.colors.primary} />;
-  }
 
   if (error) {
     return (

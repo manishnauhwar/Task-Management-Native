@@ -32,7 +32,6 @@ const AccountScreen = ({ navigation }) => {
           onPress: async () => {
             try {
               await logout();
-              await AsyncStorage.multiRemove(['@auth_token', '@user_data', '@refresh_token']);
               navigation.reset({
                 index: 0,
                 routes: [{ name: 'Login' }],

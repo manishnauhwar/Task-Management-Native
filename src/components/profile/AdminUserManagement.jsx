@@ -7,7 +7,8 @@ import {
   Modal,
   TextInput,
   Alert,
-  ScrollView
+  ScrollView,
+  ActivityIndicator
 } from 'react-native';
 import axiosInstance from '../../utils/axiosinstance';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +27,8 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
   });
   const [isNewUser, setIsNewUser] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState('');
 
   const totalPages = Math.max(1, Math.ceil(allUsers.length / pageSize));
 
@@ -40,6 +43,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
       return;
     }
     try {
+      setLoading(true);
       const response = await axiosInstance.post(
         '/users/admin/create-user',
         newUserData
@@ -64,6 +68,8 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
       } else {
         Alert.alert(t('common.error'), t('userManagement.failedCreate'));
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,6 +79,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
       return;
     }
     try {
+      setLoading(true);
       const updateData = {
         fullname: selectedUserData.fullname,
         email: selectedUserData.email,
@@ -100,6 +107,8 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
       } else {
         Alert.alert(t('common.error'), t('userManagement.failedUpdate'));
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -114,18 +123,20 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
           style: 'destructive',
           onPress: async () => {
             try {
+              setActionLoading(userId);
               const response = await axiosInstance.delete(`/users/${userId}`);
               if (response.status === 200) {
                 const updated = allUsers.filter(u => u.id !== userId);
                 onUsersUpdate(updated);
                 Alert.alert(t('common.success'), t('userManagement.userDeleted'));
 
-                // adjust pagination
                 const newTotal = Math.ceil(updated.length / pageSize) || 1;
                 setCurrentPage(cp => Math.min(cp, newTotal));
               }
             } catch {
               Alert.alert(t('common.error'), t('userManagement.failedDelete'));
+            } finally {
+              setActionLoading('');
             }
           }
         }
@@ -152,6 +163,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
           setIsNewUser(true);
           setUserModalOpen(true);
         }}
+        disabled={loading}
       >
         <Text style={[styles.buttonText, { color: theme.buttonText }]}>
           {t('userManagement.addNewUser')}
@@ -183,10 +195,10 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                   <View style={[styles.roleBadge, {
                     backgroundColor:
                       item.role === 'admin'
-                        ? theme.danger + '30'
+                        ? theme.danger + '15'
                         : item.role === 'manager'
-                          ? theme.warning + '30'
-                          : theme.success + '30'
+                          ? theme.warning + '15'
+                          : theme.success + '15'
                   }]}>
                     <Text style={[styles.roleText, {
                       color:
@@ -196,47 +208,57 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                             ? theme.warning
                             : theme.success
                     }]}>
-                      {t(`userManagement.${item.role}`)}
+                      {t(`userManagement.roles.${item.role}`)}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.userActions}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedUserData({ ...item, password: '' });
-                      setIsNewUser(false);
-                      setUserModalOpen(true);
-                    }}
-                  >
-                    <Text style={{ color: theme.primary }}>
-                      {t('userManagement.edit')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDeleteUser(item.id)}>
-                    <Text style={{ color: theme.danger }}>
-                      {t('userManagement.delete')}
-                    </Text>
-                  </TouchableOpacity>
+                  {actionLoading === item.id ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedUserData({ ...item, password: '' });
+                          setIsNewUser(false);
+                          setUserModalOpen(true);
+                        }}
+                        disabled={loading}
+                      >
+                        <Text style={{ color: theme.primary }}>
+                          {t('userManagement.edit')}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => handleDeleteUser(item.id)}
+                        disabled={loading}
+                      >
+                        <Text style={{ color: theme.danger }}>
+                          {t('userManagement.delete')}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                 </View>
               </View>
             ))}
             <View style={styles.paginationContainer}>
               <TouchableOpacity
                 onPress={goToPrevPage}
-                disabled={currentPage === 1}
-                style={{ opacity: currentPage === 1 ? 0.5 : 1 }}
+                disabled={currentPage === 1 || loading}
+                style={{ opacity: currentPage === 1 || loading ? 0.5 : 1 }}
               >
                 <Text style={{ color: theme.primary }}>
                   {t('userManagement.prev')}
                 </Text>
               </TouchableOpacity>
               <Text style={{ color: theme.text }}>
-                {t('userManagement.page')} {currentPage} {t('userManagement.of')} {totalPages}
+                {t('userManagement.pageInfo', { current: currentPage, total: totalPages })}
               </Text>
               <TouchableOpacity
                 onPress={goToNextPage}
-                disabled={currentPage === totalPages}
-                style={{ opacity: currentPage === totalPages ? 0.5 : 1 }}
+                disabled={currentPage === totalPages || loading}
+                style={{ opacity: currentPage === totalPages || loading ? 0.5 : 1 }}
               >
                 <Text style={{ color: theme.primary }}>
                   {t('userManagement.next')}
@@ -329,7 +351,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                             : role === 'manager'
                               ? 'warning'
                               : 'success'
-                          ] + '30'
+                          ] + '15'
                         : theme.inputBackground,
                       borderColor: theme.border
                     }]}
@@ -349,7 +371,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                           ]
                         : theme.textSecondary
                     }]}>
-                      {t(`userManagement.${role}`)}
+                      {t(`userManagement.roles.${role}`)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -361,20 +383,27 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                 style={[styles.modalButton, {
                   backgroundColor: theme.primary,
                   shadowColor: theme.shadowColor,
+                  opacity: loading ? 0.7 : 1
                 }]}
                 onPress={isNewUser ? handleCreateUser : handleUpdateUser}
+                disabled={loading}
               >
-                <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
-                  {isNewUser
-                    ? t('userManagement.createUser')
-                    : t('userManagement.updateUser')}
-                </Text>
+                {loading ? (
+                  <ActivityIndicator size="small" color={theme.buttonText} />
+                ) : (
+                  <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
+                    {isNewUser
+                      ? t('userManagement.createUser')
+                      : t('userManagement.updateUser')}
+                  </Text>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.cancelModalButton, {
                   backgroundColor: theme.danger,
                   shadowColor: theme.shadowColor,
+                  opacity: loading ? 0.7 : 1
                 }]}
                 onPress={() => {
                   setUserModalOpen(false);
@@ -384,6 +413,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                     setSelectedUserData(null);
                   }
                 }}
+                disabled={loading}
               >
                 <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
                   {t('common.cancel')}
@@ -399,26 +429,72 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
 
 export default AdminUserManagement;
 
-// Add your styles below as before:
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold' },
-  button: { padding: 10, borderRadius: 8, alignItems: 'center' },
+  container: { 
+    flex: 1,
+    paddingHorizontal: 15 // Add padding to align with button
+  },
+  sectionTitle: { 
+    fontSize: 20, 
+    fontWeight: 'bold',
+    marginBottom: 15
+  },
+  button: { 
+    padding: 10, 
+    borderRadius: 8, 
+    alignItems: 'center',
+    marginBottom: 15
+  },
   buttonText: { fontSize: 16 },
-  contentCard: { margin: 15, padding: 10, borderWidth: 1, borderRadius: 8 },
-  emptyText: { fontSize: 16, textAlign: 'center', marginVertical: 20 },
-  userItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10 },
-  userInfo: {},
-  userName: { fontSize: 16, fontWeight: '500' },
-  userEmail: { fontSize: 14 },
-  roleBadge: { padding: 4, borderRadius: 4, marginTop: 4 },
-  roleText: { fontSize: 12, fontWeight: '500' },
-  userActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  contentCard: { 
+    padding: 10, 
+    borderWidth: 1, 
+    borderRadius: 8 
+  },
+  emptyText: { 
+    fontSize: 16, 
+    textAlign: 'center', 
+    marginVertical: 20 
+  },
+  userItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    paddingVertical: 10,
+    borderBottomWidth: 1
+  },
+  userInfo: { flex: 1 },
+  userName: { 
+    fontSize: 16, 
+    fontWeight: '500' 
+  },
+  userEmail: { 
+    fontSize: 14,
+    marginTop: 2
+  },
+  roleBadge: { 
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 4
+  },
+  roleText: { 
+    fontSize: 12, 
+    fontWeight: '500' 
+  },
+  userActions: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 15,
+    marginLeft: 10
+  },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10
+    marginTop: 15,
+    paddingTop: 15,
+    borderTopWidth: 1
   },
   modalWrapper: {
     flex: 1,
