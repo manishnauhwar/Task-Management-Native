@@ -12,26 +12,35 @@ import { useTranslation } from 'react-i18next';
 const baseURL = 'https://taskmanagement-backend-2.onrender.com';
 // const baseURL = 'http://10.0.2.2:5000';
 
-const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
+const ProfileDetails = ({ user, theme, onProfileUpdate, profilePicture, setProfilePicture }) => {
   const { t } = useTranslation();
   const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
-  const [profilePicture, setProfilePicture] = useState(null);
   const [editData, setEditData] = useState({
     fullname: '', email: '', password: ''
   });
   
+  const getApiBaseUrl = () => {
+    return axiosInstance.defaults.baseURL;
+  };
+
+  const getProfilePictureUrl = (relativePath) => {
+    if (!relativePath) return null;
+
+    if (relativePath.startsWith('data:') || relativePath.startsWith('http')) {
+      return relativePath;
+    }
+
+    if (!relativePath.startsWith('/')) {
+      relativePath = '/' + relativePath;
+    }
+
+    return getApiBaseUrl() + relativePath;
+  };
+
   useEffect(() => {
     if (user) {
-      if (user.googleProfilePictureUrl) {
-        setProfilePicture(user.googleProfilePictureUrl);
-      } else if (user.profilePictureUrl) {
-        setProfilePicture(`${baseURL}${user.profilePictureUrl}`);
-      } else {
-        setProfilePicture(null);
-      }
-      
       setEditData({
         fullname: user.fullname || '',
         email: user.email || '',
@@ -49,13 +58,12 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
       const updateData = { fullname: editData.fullname, email: editData.email };
       if (editData.password.trim()) updateData.password = editData.password;
       
-      // Make sure we have a valid user ID
       const userId = user.id || user._id;
       if (!userId) {
         throw new Error('User ID not found');
       }
       
-      console.log('Updating user details for ID:', userId);
+      // console.log('Updating user details for ID:', userId);
       
       const res = await axiosInstance.put(`/users/${userId}`, updateData);
       if (res.status === 200) {
@@ -90,7 +98,6 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
   };
 
   const handleImagePicker = () => {
-    // Check if this is a Google user
     const isGoogleUser = !!user.googleProfilePictureUrl;
     
     if (isGoogleUser) {
@@ -122,43 +129,30 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
           uri: asset.uri, type: asset.type, name: asset.fileName
         });
         
-        // Make sure we have a valid user ID
         const userId = user.id || user._id;
         
         if (!userId) {
           throw new Error('User ID not found');
         }
         
-        console.log('Uploading profile picture for user ID:', userId);
-        
-        const up = await axiosInstance.post(
+        const response = await axiosInstance.post(
           `/users/${userId}/profile-picture`, fd,
           { headers: { 'Content-Type': 'multipart/form-data' }}
         );
         
-        const newProfilePictureUrl = up.data.profilePictureUrl 
-          ? `${baseURL}${up.data.profilePictureUrl}` 
-          : null;
-        
-        setProfilePicture(newProfilePictureUrl);
-
-        const pu = { 
-          ...user,
-          profilePictureUrl: up.data.profilePictureUrl 
-        };
-        
-        const st = await AsyncStorage.getItem('@user_data');
-        if (st) {
-          const pd = JSON.parse(st);
-          await AsyncStorage.setItem('@user_data',
-            JSON.stringify({ 
-              ...pd,
-              profilePictureUrl: up.data.profilePictureUrl 
-            })
-          );
+        if (response.data && response.data.profilePictureUrl) {
+          const updatedUser = {
+            ...user,
+            profilePictureUrl: response.data.profilePictureUrl,
+            googleProfilePictureUrl: null 
+          };
+          
+          await AsyncStorage.setItem('@user_data', JSON.stringify(updatedUser));
+          
+          onProfileUpdate(updatedUser);
+          
+          Alert.alert(t('common.success'), t('profile.profilePictureUpdated'));
         }
-        onProfileUpdate(pu);
-        Alert.alert(t('common.success'), t('profile.profilePictureUpdated'));
       } catch (e) {
         console.error('Profile picture upload error:', e);
         Alert.alert(t('common.error'), t('profile.uploadError'));
@@ -168,7 +162,6 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
     });
   };
 
-  // Check if user data is available
   if (!user || !user.fullname) {
     return (
       <View style={styles.loadingContainer}>
@@ -194,7 +187,11 @@ const ProfileDetails = ({ user, theme, onProfileUpdate }) => {
               <ActivityIndicator size="large" color={theme.primary} />
             </View>
           ) : profilePicture ? (
-            <Image source={{ uri: profilePicture }} style={styles.profilePicture} />
+            <Image 
+              source={{ uri: profilePicture }} 
+              style={styles.profilePicture}
+              onError={() => setProfilePicture(null)}
+            />
           ) : (
             <Icon name="account-circle" size={100} color={theme.text} />
           )}

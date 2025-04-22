@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 
 const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState({});
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [availableUsers, setAvailableUsers] = useState([]);
@@ -24,6 +24,7 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
   const [isCreateTeamModalVisible, setIsCreateTeamModalVisible] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [activeModalView, setActiveModalView] = useState('team'); // 'team', 'current', 'available'
 
   const fetchAvailableUsers = async () => {
     try {
@@ -55,6 +56,7 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
     setSelectedTeam(team);
     setTeamMembers(team.members || []);
     setIsTeamDetailsModalVisible(true);
+    setActiveModalView('team');
     fetchAvailableUsers();
   };
 
@@ -64,7 +66,7 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
     }
 
     try {
-      setLoading(true);
+      setLoading(prev => ({ ...prev, createTeam: true }));
       const response = await axiosInstance.post('/teams', {
         name: newTeamName,
         managerId: user.id,
@@ -84,13 +86,13 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
       console.error('Error creating team:', error);
       Alert.alert(t('common.error'), t('teamManagement.errorCreatingTeam'));
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, createTeam: false }));
     }
   };
 
   const handleAddMember = async (userId) => {
     try {
-      setLoading(true);
+      setLoading(prev => ({ ...prev, [userId]: true }));
       
       const updatedMembers = [...(selectedTeam.members?.map(m => m._id || m.id) || []), userId];
       
@@ -116,13 +118,13 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
       console.error('Error adding team member:', error);
       Alert.alert(t('common.error'), t('teamManagement.errorAddingMember'));
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, [userId]: false }));
     }
   };
 
   const handleRemoveMember = async (userId) => {
     try {
-      setLoading(true);
+      setLoading(prev => ({ ...prev, [userId]: true }));
       
       const updatedMembers = selectedTeam.members
         .filter(m => (m._id || m.id) !== userId)
@@ -149,7 +151,7 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
       console.error('Error removing team member:', error);
       Alert.alert(t('common.error'), t('teamManagement.errorRemovingMember'));
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, [userId]: false }));
     }
   };
 
@@ -166,8 +168,163 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
     setIsCreateTeamModalVisible(true);
   };
 
+  const renderTeamDetails = () => {
+    return (
+      <>
+        <View style={styles.modalTabContainer}>
+          <TouchableOpacity 
+            style={[
+              styles.modalTab, 
+              activeModalView === 'team' && { 
+                borderBottomColor: theme.primary,
+                borderBottomWidth: 2 
+              }
+            ]}
+            onPress={() => setActiveModalView('team')}
+          >
+            <Text style={[
+              styles.modalTabText, 
+              { color: activeModalView === 'team' ? theme.primary : theme.textSecondary }
+            ]}>
+              {t('teamManagement.team')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[
+              styles.modalTab, 
+              activeModalView === 'current' && { 
+                borderBottomColor: theme.primary,
+                borderBottomWidth: 2 
+              }
+            ]}
+            onPress={() => setActiveModalView('current')}
+          >
+            <Text style={[
+              styles.modalTabText, 
+              { color: activeModalView === 'current' ? theme.primary : theme.textSecondary }
+            ]}>
+              {t('teamManagement.currentMembers')} ({teamMembers.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[
+              styles.modalTab, 
+              activeModalView === 'available' && { 
+                borderBottomColor: theme.primary,
+                borderBottomWidth: 2 
+              }
+            ]}
+            onPress={() => setActiveModalView('available')}
+          >
+            <Text style={[
+              styles.modalTabText, 
+              { color: activeModalView === 'available' ? theme.primary : theme.textSecondary }
+            ]}>
+              {t('teamManagement.availableMembers')} ({availableUsers.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {activeModalView === 'team' && (
+          <View style={styles.teamInfoContainer}>
+            <Text style={[styles.teamInfoLabel, { color: theme.textSecondary }]}>
+              {t('teamManagement.teamName')}:
+            </Text>
+            <Text style={[styles.teamInfoValue, { color: theme.text }]}>
+              {selectedTeam?.name}
+            </Text>
+            <Text style={[styles.teamInfoLabel, { color: theme.textSecondary, marginTop: 15 }]}>
+              {t('teamManagement.memberCount')}:
+            </Text>
+            <Text style={[styles.teamInfoValue, { color: theme.text }]}>
+              {teamMembers.length}
+            </Text>
+          </View>
+        )}
+
+        {activeModalView === 'current' && (
+          teamMembers.length === 0 ? (
+            <View style={styles.emptyListContainer}>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                {t('teamManagement.noMembersInTeam')}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={teamMembers}
+              keyExtractor={(item) => (item._id || item.id).toString()}
+              renderItem={({ item }) => (
+                <View style={[styles.memberItem, { borderBottomColor: theme.border }]}>
+                  <View style={styles.memberInfo}>
+                    <Text style={[styles.memberName, { color: theme.text }]}>
+                      {item.fullname}
+                    </Text>
+                    <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
+                      {item.email}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.removeButton, { backgroundColor: theme.danger }]}
+                    onPress={() => handleRemoveMember(item._id || item.id)}
+                    disabled={loading[item._id || item.id]}
+                  >
+                    {loading[item._id || item.id] ? (
+                      <ActivityIndicator size="small" color={theme.buttonText} />
+                    ) : (
+                      <Icon name="remove" size={18} color={theme.buttonText} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+              style={styles.membersList}
+            />
+          )
+        )}
+
+        {activeModalView === 'available' && (
+          availableUsers.length === 0 ? (
+            <View style={styles.emptyListContainer}>
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                {t('teamManagement.noAvailableUsers')}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={availableUsers}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <View style={[styles.memberItem, { borderBottomColor: theme.border }]}>
+                  <View style={styles.memberInfo}>
+                    <Text style={[styles.memberName, { color: theme.text }]}>
+                      {item.fullname}
+                    </Text>
+                    <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
+                      {item.email}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.addButton, { backgroundColor: theme.success }]}
+                    onPress={() => handleAddMember(item.id)}
+                    disabled={loading[item.id]}
+                  >
+                    {loading[item.id] ? (
+                      <ActivityIndicator size="small" color={theme.buttonText} />
+                    ) : (
+                      <Icon name="add" size={18} color={theme.buttonText} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+              style={styles.membersList}
+            />
+          )
+        )}
+      </>
+    );
+  };
+
   return (
-    <>
+    <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={[styles.sectionTitle, { color: theme.text }]}>
           {t('teamManagement.yourTeams')}
@@ -225,94 +382,14 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
           <View style={[styles.modalContent, { backgroundColor: theme.cardBackground }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
-                {selectedTeam?.name} - {t('teamManagement.members')}
+                {selectedTeam?.name}
               </Text>
               <TouchableOpacity onPress={() => setIsTeamDetailsModalVisible(false)}>
                 <Icon name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.tabsContainer}>
-              <Text style={[styles.tabTitle, { color: theme.text }]}>
-                {t('teamManagement.currentMembers')}
-              </Text>
-            </View>
-
-            {teamMembers.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                {t('teamManagement.noMembersInTeam')}
-              </Text>
-            ) : (
-              <FlatList
-                data={teamMembers}
-                keyExtractor={(item) => (item._id || item.id).toString()}
-                renderItem={({ item }) => (
-                  <View style={[styles.memberItem, { borderBottomColor: theme.border }]}>
-                    <View style={styles.memberInfo}>
-                      <Text style={[styles.memberName, { color: theme.text }]}>
-                        {item.fullname}
-                      </Text>
-                      <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
-                        {item.email}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.removeButton, { backgroundColor: theme.danger }]}
-                      onPress={() => handleRemoveMember(item._id || item.id)}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator size="small" color={theme.buttonText} />
-                      ) : (
-                        <Icon name="remove" size={18} color={theme.buttonText} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                )}
-                style={styles.membersList}
-              />
-            )}
-
-            <View style={styles.tabsContainer}>
-              <Text style={[styles.tabTitle, { color: theme.text }]}>
-                {t('teamManagement.availableMembers')}
-              </Text>
-            </View>
-
-            {availableUsers.length === 0 ? (
-              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-                {t('teamManagement.noAvailableUsers')}
-              </Text>
-            ) : (
-              <FlatList
-                data={availableUsers}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <View style={[styles.memberItem, { borderBottomColor: theme.border }]}>
-                    <View style={styles.memberInfo}>
-                      <Text style={[styles.memberName, { color: theme.text }]}>
-                        {item.fullname}
-                      </Text>
-                      <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
-                        {item.email}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.addButton, { backgroundColor: theme.success }]}
-                      onPress={() => handleAddMember(item.id)}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator size="small" color={theme.buttonText} />
-                      ) : (
-                        <Icon name="add" size={18} color={theme.buttonText} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                )}
-                style={styles.membersList}
-              />
-            )}
+            
+            {renderTeamDetails()}
           </View>
         </View>
       </Modal>
@@ -401,13 +478,13 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
                 styles.createTeamButton, 
                 { 
                   backgroundColor: theme.primary,
-                  opacity: loading || !newTeamName.trim() ? 0.7 : 1 
+                  opacity: loading.createTeam || !newTeamName.trim() ? 0.7 : 1 
                 }
               ]}
               onPress={handleCreateTeam}
-              disabled={loading || !newTeamName.trim()}
+              disabled={loading.createTeam || !newTeamName.trim()}
             >
-              {loading ? (
+              {loading.createTeam ? (
                 <ActivityIndicator size="small" color={theme.buttonText} />
               ) : (
                 <Text style={[styles.buttonText, { color: theme.buttonText }]}>
@@ -418,11 +495,14 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -501,16 +581,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  tabsContainer: {
-    marginVertical: 10,
+  modalTabContainer: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
-  tabTitle: {
+  modalTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modalTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  teamInfoContainer: {
+    padding: 10,
+  },
+  teamInfoLabel: {
+    fontSize: 14,
+    marginBottom: 5,
+  },
+  teamInfoValue: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
+    fontWeight: '500',
+  },
+  emptyListContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
   },
   membersList: {
-    maxHeight: 200,
+    maxHeight: 300,
   },
   memberItem: {
     flexDirection: 'row',

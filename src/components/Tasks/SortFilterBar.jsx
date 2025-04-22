@@ -58,7 +58,7 @@ const SortFilterBar = ({
   ];
 
   return (
-    <Surface style={[styles.container, { backgroundColor: customTheme.background }]}>
+    <Surface style={[styles.container, { backgroundColor: customTheme.cardBackground }]}>
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder={t('sortFilter.searchPlaceholder')}
@@ -88,7 +88,8 @@ const SortFilterBar = ({
                   : t('sortFilter.sort')}
               </Button>
             }
-            style={[styles.menu, { backgroundColor: customTheme.background }]}
+            contentStyle={[styles.menuContent, { backgroundColor: customTheme.cardBackground }]}
+            style={[styles.menu, { backgroundColor: customTheme.cardBackground }]}
           >
             <Text style={[styles.menuTitle, { color: customTheme.text }]}>{t('sortFilter.sortBy')}</Text>
             {sortFieldItems.map((item) => (
@@ -100,9 +101,10 @@ const SortFilterBar = ({
                 }}
                 title={item.label}
                 titleStyle={{ color: customTheme.text }}
+                style={{ backgroundColor: customTheme.cardBackground }}
               />
             ))}
-            <Divider style={styles.divider} />
+            <Divider style={[styles.divider, { backgroundColor: customTheme.divider }]} />
             <Text style={[styles.menuTitle, { color: customTheme.text }]}>{t('sortFilter.order')}</Text>
             {sortOrderItems.map((item) => (
               <Menu.Item
@@ -113,6 +115,7 @@ const SortFilterBar = ({
                 }}
                 title={item.label}
                 titleStyle={{ color: customTheme.text }}
+                style={{ backgroundColor: customTheme.cardBackground }}
               />
             ))}
           </Menu>
@@ -132,9 +135,10 @@ const SortFilterBar = ({
                 {t('sortFilter.filter')}
               </Button>
             }
-            style={[styles.menu, { backgroundColor: customTheme.background }]}
+            contentStyle={[styles.menuContent, { backgroundColor: customTheme.cardBackground }]}
+            style={[styles.menu, { backgroundColor: customTheme.cardBackground }]}
           >
-            <View style={[styles.filterMenu, { backgroundColor: customTheme.background }]}>
+            <View style={[styles.filterMenu, { backgroundColor: customTheme.cardBackground }]}>
               <Text style={[styles.menuTitle, { color: customTheme.text }]}>{t('sortFilter.filterStatusTitle')}</Text>
               <View style={styles.chipContainer}>
                 {filterStatusItems.map((item) => (
@@ -145,7 +149,7 @@ const SortFilterBar = ({
                       setFilterStatus(item.value);
                       setFilterMenuVisible(false);
                     }}
-                    style={styles.chip}
+                    style={[styles.chip, { backgroundColor: customTheme.cardBackground }]}
                     mode="outlined"
                     selectedColor={customTheme.primary}
                     textStyle={{ color: customTheme.text, fontSize: 14 }}
@@ -154,7 +158,7 @@ const SortFilterBar = ({
                   </Chip>
                 ))}
               </View>
-              <Divider style={styles.divider} />
+              <Divider style={[styles.divider, { backgroundColor: customTheme.divider }]} />
               <Text style={[styles.menuTitle, { color: customTheme.text }]}>{t('sortFilter.filterPriorityTitle')}</Text>
               <View style={styles.chipContainer}>
                 {filterPriorityItems.map((item) => (
@@ -165,7 +169,7 @@ const SortFilterBar = ({
                       setFilterPriority(item.value);
                       setFilterMenuVisible(false);
                     }}
-                    style={styles.chip}
+                    style={[styles.chip, { backgroundColor: customTheme.cardBackground }]}
                     mode="outlined"
                     selectedColor={customTheme.primary}
                     textStyle={{ color: customTheme.text, fontSize: 14 }}
@@ -210,7 +214,10 @@ const styles = StyleSheet.create({
   menu: {
     marginTop: 60,
     left: 200,
-    width: "40%"
+    width: "40%",
+  },
+  menuContent: {
+    borderRadius: 8,
   },
   menuTitle: {
     fontSize: 16,

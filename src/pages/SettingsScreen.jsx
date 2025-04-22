@@ -165,7 +165,6 @@ const SettingsScreen = () => {
         <TouchableOpacity
           style={[styles.languageSelector, { backgroundColor: theme.cardBackground }]}
           onPress={() => {
-            console.log('Language selector pressed');
             setShowLanguageModal(true);
           }}
         >

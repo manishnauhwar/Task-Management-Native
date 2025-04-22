@@ -1,7 +1,8 @@
-import { View, TouchableOpacity, RefreshControl, FlatList, StyleSheet, Modal, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, TouchableOpacity, RefreshControl, FlatList, StyleSheet, Modal, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Text, Button, Portal, Dialog, TextInput as PaperTextInput, Switch, Surface, List, Divider, Snackbar, Chip, IconButton, TouchableRipple, Menu } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import axiosInstance from '../../utils/axiosinstance';
 import { useTheme } from '../../utils/ThemeContext';
 import { getCurrentUser } from '../../utils/authService';
@@ -71,6 +72,8 @@ const TaskTable = ({
     dueDate: '',
     priority: 'Medium',
   });
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  const [showAddDatePicker, setShowAddDatePicker] = useState(false);
   const [priorityMenuVisible, setPriorityMenuVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -178,6 +181,13 @@ const TaskTable = ({
   const formatDateForBackend = (dateString) => {
     if (!dateString) return '';
 
+    if (dateString instanceof Date) {
+      const year = dateString.getFullYear();
+      const month = String(dateString.getMonth() + 1).padStart(2, '0');
+      const day = String(dateString.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
 
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
@@ -234,7 +244,7 @@ const TaskTable = ({
   }, []);
 
   const handleTaskPress = (task) => {
-    setSelectedTask(task);
+    setSelectedTask({...task, _originalDueDate: task.dueDate});
     setIsDialogVisible(true);
   };
 
@@ -266,9 +276,33 @@ const TaskTable = ({
     try {
       setIsEditing(true);
       if (!selectedTask) return;
+      
+      // Check due date against current date to determine status
+      let updatedStatus = selectedTask.status;
+      if (selectedTask.dueDate) {
+        const dueDate = new Date(selectedTask.dueDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        // If due date is in the future and task is not completed
+        if (dueDate > today && selectedTask.status.toLowerCase() !== 'completed') {
+          // If due date is today or approaching (within 7 days), set to In Progress
+          const daysDifference = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+          if (daysDifference <= 7) {
+            updatedStatus = 'In Progress';
+          } else {
+            // Otherwise, it's To Do (further in the future)
+            updatedStatus = 'To Do';
+          }
+        } else if (dueDate < today && selectedTask.status.toLowerCase() !== 'completed') {
+          // If due date is in the past and not completed, it's overdue
+          updatedStatus = 'overdue';
+        }
+      }
+      
       const response = await axiosInstance.put(`/tasks/${selectedTask._id}`, {
         title: selectedTask.title,
-        status: selectedTask.status,
+        status: updatedStatus,
         priority: selectedTask.priority,
         dueDate: selectedTask.dueDate,
         description: selectedTask.description,
@@ -367,24 +401,32 @@ const TaskTable = ({
     return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
   };
 
-  const handleDueDateChange = (text) => {
-    let formattedText = text;
-    if (text.length === 2 && !text.includes('/')) {
-      formattedText = `${text}/`;
-    } else if (text.length === 5 && text.charAt(2) === '/' && !text.includes('/', 3)) {
-      formattedText = `${text}/`;
-    }
-    setSelectedTask(prev => ({ ...prev, dueDate: formattedText }));
+  const showEditDatepicker = () => {
+    setShowEditDatePicker(true);
   };
 
-  const handleNewTaskDueDateChange = (text) => {
-    let formattedText = text;
-    if (text.length === 2 && !text.includes('/')) {
-      formattedText = `${text}/`;
-    } else if (text.length === 5 && text.charAt(2) === '/' && !text.includes('/', 3)) {
-      formattedText = `${text}/`;
-    }
-    setNewTask(prev => ({ ...prev, dueDate: formattedText }));
+  const showAddDatepicker = () => {
+    setShowAddDatePicker(true);
+  };
+
+  const onEditDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || (selectedTask?.dueDate ? new Date(selectedTask.dueDate) : new Date());
+    setShowEditDatePicker(Platform.OS === 'ios');
+    
+    setSelectedTask(prev => ({
+      ...prev,
+      dueDate: formatDateForBackend(currentDate)
+    }));
+  };
+
+  const onAddDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || new Date();
+    setShowAddDatePicker(Platform.OS === 'ios');
+    
+    setNewTask(prev => ({
+      ...prev,
+      dueDate: formatDateForDisplay(currentDate)
+    }));
   };
 
   const renderItem = ({ item }) => (
@@ -711,23 +753,34 @@ const TaskTable = ({
                 <Text style={[styles.inputLabel, { color: theme.text }]}>
                   {t('taskTable.input.dueDate')}
                 </Text>
-                <TextInput
-                  value={selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
-                  onChangeText={text => setSelectedTask(prev => ({...prev, dueDate: text}))}
+                <TouchableOpacity 
                   style={[
-                    styles.textInput, 
+                    styles.datePickerButton, 
                     { 
                       backgroundColor: theme.inputBackground,
-                      color: theme.text,
                       borderColor: theme.border,
                     }
                   ]}
-                  placeholder="MM/DD/YYYY"
-                  placeholderTextColor={theme.placeholder}
-                  keyboardType="numeric"
-                  maxLength={10}
-                  editable={!isEditing}
-                />
+                  onPress={showEditDatepicker}
+                  disabled={isEditing}
+                >
+                  <Text style={[styles.datePickerText, { color: theme.text }]}>
+                    {selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
+                  </Text>
+                  <Icon name="calendar" size={20} color={theme.text} />
+                </TouchableOpacity>
+                
+                {showEditDatePicker && (
+                  <DateTimePicker
+                    testID="editDateTimePicker"
+                    value={selectedTask?.dueDate ? new Date(selectedTask.dueDate) : new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onEditDateChange}
+                    minimumDate={new Date()}
+                    themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                  />
+                )}
               </ScrollView>
 
               <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
@@ -957,23 +1010,34 @@ const TaskTable = ({
                 <Text style={[styles.inputLabel, { color: theme.text }]}>
                   {t('taskTable.input.dueDate')}
                 </Text>
-                <TextInput
-                  value={newTask.dueDate}
-                  onChangeText={handleNewTaskDueDateChange}
+                <TouchableOpacity 
                   style={[
-                    styles.textInput, 
+                    styles.datePickerButton, 
                     { 
                       backgroundColor: theme.inputBackground,
-                      color: theme.text,
                       borderColor: theme.border,
                     }
                   ]}
-                  placeholder="MM/DD/YYYY"
-                  placeholderTextColor={theme.placeholder}
-                  keyboardType="numeric"
-                  maxLength={10}
-                  editable={!isSubmitting}
-                />
+                  onPress={showAddDatepicker}
+                  disabled={isSubmitting}
+                >
+                  <Text style={[styles.datePickerText, { color: theme.text }]}>
+                    {newTask.dueDate || 'Select a date'}
+                  </Text>
+                  <Icon name="calendar" size={20} color={theme.text} />
+                </TouchableOpacity>
+                
+                {showAddDatePicker && (
+                  <DateTimePicker
+                    testID="addDateTimePicker"
+                    value={new Date()}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onAddDateChange}
+                    minimumDate={new Date()}
+                    themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                  />
+                )}
               </View>
 
               <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
@@ -1277,6 +1341,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    height: 40,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 14,
   },
 });
 

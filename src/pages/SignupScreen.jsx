@@ -23,6 +23,11 @@ const SignupScreen = ({ navigation }) => {
   const [errors, setErrors]     = useState({
     name: '', email: '', password: '', general: ''
   });
+  const [focusedInputs, setFocusedInputs] = useState({
+    name: false,
+    email: false,
+    password: false
+  });
   const { theme } = useTheme();
 
   const isMounted = useRef(true);
@@ -57,7 +62,23 @@ const SignupScreen = ({ navigation }) => {
     return '';
   };
 
-  // Run all validators, set errors, and return overall validity
+  const handleInputFocus = (field) => {
+    setFocusedInputs(prev => ({ ...prev, [field]: true }));
+  };
+
+  const handleInputBlur = (field, value) => {
+    setFocusedInputs(prev => ({ ...prev, [field]: false }));
+    if (field === 'name') {
+      const norm = normalizeName(value);
+      setName(norm);
+      setErrors(prev => ({ ...prev, name: validateName(norm) }));
+    } else if (field === 'email') {
+      setErrors(prev => ({ ...prev, email: validateEmail(value) }));
+    } else if (field === 'password') {
+      setErrors(prev => ({ ...prev, password: validatePassword(value) }));
+    }
+  };
+
   const validateAllInputs = () => {
     const nameError     = validateName(name);
     const emailError    = validateEmail(email);
@@ -73,7 +94,6 @@ const SignupScreen = ({ navigation }) => {
     return !(nameError || emailError || passwordError);
   };
 
-  // Determine if form is valid right now
   const isFormValid = 
     !validateName(name) &&
     !validateEmail(email) &&
@@ -151,22 +171,16 @@ const SignupScreen = ({ navigation }) => {
               styles.input,
               {
                 backgroundColor: theme.inputBackground,
-                borderColor: errors.name ? 'red' : theme.border,
+                borderColor: errors.name && !focusedInputs.name ? 'red' : theme.border,
                 color: theme.text
               }
             ]}
             value={name}
             onChangeText={setName}
-            onBlur={() => {
-              const norm = normalizeName(name);
-              setName(norm);
-              setErrors(prev => ({
-                ...prev,
-                name: validateName(norm)
-              }));
-            }}
+            onFocus={() => handleInputFocus('name')}
+            onBlur={() => handleInputBlur('name', name)}
           />
-          {errors.name && <Text style={styles.fieldError}>{errors.name}</Text>}
+          {errors.name && !focusedInputs.name && <Text style={styles.fieldError}>{errors.name}</Text>}
         </View>
 
         {/* Email */}
@@ -180,20 +194,16 @@ const SignupScreen = ({ navigation }) => {
               styles.input,
               {
                 backgroundColor: theme.inputBackground,
-                borderColor: errors.email ? 'red' : theme.border,
+                borderColor: errors.email && !focusedInputs.email ? 'red' : theme.border,
                 color: theme.text
               }
             ]}
             value={email}
             onChangeText={setEmail}
-            onBlur={() =>
-              setErrors(prev => ({
-                ...prev,
-                email: validateEmail(email)
-              }))
-            }
+            onFocus={() => handleInputFocus('email')}
+            onBlur={() => handleInputBlur('email', email)}
           />
-          {errors.email && <Text style={styles.fieldError}>{errors.email}</Text>}
+          {errors.email && !focusedInputs.email && <Text style={styles.fieldError}>{errors.email}</Text>}
         </View>
 
         {/* Password */}
@@ -206,20 +216,16 @@ const SignupScreen = ({ navigation }) => {
               styles.input,
               {
                 backgroundColor: theme.inputBackground,
-                borderColor: errors.password ? 'red' : theme.border,
+                borderColor: errors.password && !focusedInputs.password ? 'red' : theme.border,
                 color: theme.text
               }
             ]}
             value={password}
             onChangeText={setPassword}
-            onBlur={() =>
-              setErrors(prev => ({
-                ...prev,
-                password: validatePassword(password)
-              }))
-            }
+            onFocus={() => handleInputFocus('password')}
+            onBlur={() => handleInputBlur('password', password)}
           />
-          {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
+          {errors.password && !focusedInputs.password && <Text style={styles.fieldError}>{errors.password}</Text>}
         </View>
 
         {/* Sign Up Button */}
@@ -265,10 +271,10 @@ const SignupScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container:     { flex: 1 },
   image:         { width: '100%', height: '40%', resizeMode: 'cover' },
-  formContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  formContainer: { flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 20, paddingHorizontal: 20 },
   title:         { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
   inputContainer:{ width: 300, marginBottom: 15 },
-  input:         { width: '100%', height: 40, borderWidth: 1, padding: 10, borderRadius: 5 },
+  input:         { width: '100%', height: 40, borderWidth: 1, padding: 10, borderRadius: 5, fontSize: 16 },
   fieldError:    { color: 'red', fontSize: 12, marginTop: 2, marginLeft: 5 },
   button:        {
     padding: 10,

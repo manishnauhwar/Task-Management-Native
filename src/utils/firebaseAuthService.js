@@ -32,7 +32,7 @@ const storeAuthData = async (token, userData) => {
  */
 export const configureGoogleSignIn = async () => {
   try {
-    console.log('Configuring Google Sign-In with WebClientID:', WEB_CLIENT_ID);
+    // console.log('Configuring Google Sign-In with WebClientID:', WEB_CLIENT_ID);
     GoogleSignin.configure({
       webClientId: WEB_CLIENT_ID,
       offlineAccess: true,
@@ -41,7 +41,7 @@ export const configureGoogleSignIn = async () => {
     
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      console.log('Google Play Services are available');
+      // console.log('Google Play Services are available');
       return true;
     } catch (playServicesError) {
       console.error('Google Play Services error:', playServicesError);
@@ -60,16 +60,16 @@ export const googleSignIn = async () => {
   try {
     // Check if Google Play Services are available
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    console.log('Google Play Services check passed');
+    // console.log('Google Play Services check passed');
     
-    console.log('Attempting to get Google Sign-In...');
+    // console.log('Attempting to get Google Sign-In...');
     const response = await GoogleSignin.signIn();
-    console.log('Google Sign-In response structure:', JSON.stringify(response, null, 2));
+    // console.log('Google Sign-In response structure:', JSON.stringify(response, null, 2));
     
     const userInfo = response.data || response;
     
     const userEmail = userInfo.user?.email || userInfo.email;
-    console.log('Google Sign-In successful, user email:', userEmail);
+    // console.log('Google Sign-In successful, user email:', userEmail);
     
     const idToken = userInfo.idToken;
     
@@ -78,9 +78,9 @@ export const googleSignIn = async () => {
       throw new Error('Google Sign-In cancelled or failed');
     }
     
-    console.log('ID Token successfully retrieved');
+    // console.log('ID Token successfully retrieved');
     
-    console.log('Creating Google credential');
+    // console.log('Creating Google credential');
     let googleCredential;
     try {
       googleCredential = GoogleAuthProvider.credential(idToken);
@@ -93,7 +93,7 @@ export const googleSignIn = async () => {
     const auth = getAuth();
     
     // Sign in with the credential
-    console.log('Signing in with Firebase credential');
+    // console.log('Signing in with Firebase credential');
     let userCredential;
     try {
       userCredential = await signInWithCredential(auth, googleCredential);
@@ -104,7 +104,7 @@ export const googleSignIn = async () => {
     
     // Get user info from Firebase
     const firebaseUser = userCredential.user;
-    console.log('Firebase sign-in successful:', firebaseUser.email);
+    // console.log('Firebase sign-in successful:', firebaseUser.email);
     
     // Prepare Firebase user data for our backend
     const firebaseData = {
@@ -114,7 +114,7 @@ export const googleSignIn = async () => {
       photoURL: firebaseUser.photoURL
     };
     
-    console.log('Sending Firebase user data to backend:', JSON.stringify(firebaseData));
+    // console.log('Sending Firebase user data to backend:', JSON.stringify(firebaseData));
     
     // Send Firebase user data to our backend
     const backendResponse = await axiosInstance.post('/users/google-auth', firebaseData);
@@ -126,7 +126,7 @@ export const googleSignIn = async () => {
     // Get user and token from our backend
     const { token, user } = backendResponse.data;
     
-    console.log('Backend authentication successful:', JSON.stringify(user));
+    // console.log('Backend authentication successful:', JSON.stringify(user));
     
     // Store auth data locally
     await storeAuthData(token, user);
@@ -166,14 +166,14 @@ export const signOut = async () => {
       // Sign out from Firebase
       await firebaseSignOut(auth);
     } else {
-      console.log('No Firebase user to sign out');
+      // console.log('No Firebase user to sign out');
     }
     
     // Sign out from Google (this should work even if not signed in)
     try {
       await GoogleSignin.signOut();
     } catch (googleError) {
-      console.log('Google Sign out issue (non-critical):', googleError.message);
+      // console.log('Google Sign out issue (non-critical):', googleError.message);
       // Continue with the logout process even if Google sign-out fails
     }
     

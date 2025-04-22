@@ -14,14 +14,14 @@ const TaskScreen = () => {
   const [filterPriority, setFilterPriority] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log("TaskScreen focused: refresh TaskTable data here");
-      return () => {
-        console.log("TaskScreen unfocused");
-      };
-    }, [])
-  );
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     console.log("TaskScreen focused: refresh TaskTable data here");
+  //     return () => {
+  //       console.log("TaskScreen unfocused");
+  //     };
+  //   }, [])
+  // );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>

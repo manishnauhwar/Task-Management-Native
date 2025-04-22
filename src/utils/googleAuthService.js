@@ -1,5 +1,4 @@
-// DEPRECATED: This file is deprecated. Please use firebaseAuthService.js instead.
-// This file will be removed in a future update.
+// DEPRECATED: using firebaseAuthService.js instead.
 
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import AsyncStorage from '@react-native-async-storage/async-storage';

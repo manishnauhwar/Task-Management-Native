@@ -10,14 +10,14 @@ import { StyleSheet } from 'react-native';
 const Dashboardscreen = () => {
   const { theme } = useTheme();
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log("Dashboard focused: refresh data here");
-      return () => {
-        console.log("Dashboard unfocused");
-      };
-    }, [])
-  );
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     console.log("Dashboard focused: refresh data here");
+  //     return () => {
+  //       console.log("Dashboard unfocused");
+  //     };
+  //   }, [])
+  // );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>

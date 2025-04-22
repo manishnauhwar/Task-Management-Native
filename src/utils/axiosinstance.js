@@ -6,7 +6,7 @@ const baseURL ='https://taskmanagement-backend-2.onrender.com';
 
 const TOKEN_KEY = '@auth_token';
 
-console.log('Initializing axios with baseURL:', baseURL);
+// console.log('Initializing axios with baseURL:', baseURL);
 
 const axiosInstance = axios.create({
   baseURL,
@@ -18,20 +18,20 @@ const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   async (config) => {
-    console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`);
+    // console.log(`Making ${config.method?.toUpperCase()} request to: ${config.url}`);
     
-    if (config.data) {
-      if (config.data instanceof FormData) {
-        console.log('Request payload: [FormData]');
-      } else {
-        console.log('Request payload:', JSON.stringify(config.data, null, 2));
-      }
-    }
+    // if (config.data) {
+    //   if (config.data instanceof FormData) {
+    //     // console.log('Request payload: [FormData]');
+    //   } else {
+    //     // console.log('Request payload:', JSON.stringify(config.data, null, 2));
+    //   }
+    // }
     
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('Added auth token to request');
+      // console.log('Added auth token to request');
     }
     return config;
   },
@@ -43,7 +43,7 @@ axiosInstance.interceptors.request.use(
 
 axiosInstance.interceptors.response.use(
   (response) => {
-    console.log(`Response received from: ${response.config.url}, status: ${response.status}`);
+    // console.log(`Response received from: ${response.config.url}, status: ${response.status}`);
     return response;
   },
   async (error) => {
@@ -69,7 +69,7 @@ axiosInstance.interceptors.response.use(
       try {
         await AsyncStorage.removeItem(TOKEN_KEY);
         await AsyncStorage.removeItem('@user_data');
-        console.log('Authentication failed, clearing tokens');
+        // console.log('Authentication failed, clearing tokens');
       } catch (e) {
         console.error('Error handling unauthorized access:', e);
       }

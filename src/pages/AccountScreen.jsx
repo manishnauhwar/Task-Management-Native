@@ -14,11 +14,11 @@ const AccountScreen = ({ navigation }) => {
   const { unreadCount } = useNotification();
   const { t } = useTranslation();
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log('AccountScreen is focused');
-    }, [])
-  );
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     // console.log('AccountScreen is focused');
+  //   }, [])
+  // );
 
   const handleLogout = async () => {
     Alert.alert(

@@ -18,6 +18,7 @@ import {
   Portal,
   TextInput as RNTextInput
 } from 'react-native-paper';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axiosInstance from '../../utils/axiosinstance';
 import { useTheme } from '../../utils/ThemeContext';
@@ -38,6 +39,7 @@ const TaskCards = () => {
   const [priority, setPriority] = useState('Medium');
   const [dueDate, setDueDate] = useState(new Date());
   const [dueDateString, setDueDateString] = useState(formatDateForDisplay(new Date()));
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [priorityMenuVisible, setPriorityMenuVisible] = useState(false);
   const [user, setUser] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -240,6 +242,17 @@ const TaskCards = () => {
     }
   };
 
+  const onDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || dueDate;
+    setShowDatePicker(Platform.OS === 'ios');
+    setDueDate(currentDate);
+    setDueDateString(formatDateForDisplay(currentDate));
+  };
+
+  const showDatepicker = () => {
+    setShowDatePicker(true);
+  };
+
   const togglePriorityMenu = () => {
     setPriorityMenuVisible(!priorityMenuVisible);
   };
@@ -259,7 +272,7 @@ const TaskCards = () => {
       taskDueDate.setHours(0, 0, 0, 0);
       return taskDueDate.getTime() === today.getTime();
     } catch (error) {
-      console.log('Invalid date for task:', task.id);
+      // console.log('Invalid date for task:', task.id);
       return false;
     }
   }).length || 0;
@@ -270,7 +283,7 @@ const TaskCards = () => {
       taskDueDate.setHours(0, 0, 0, 0);
       return taskDueDate < today && task.status?.toLowerCase() !== 'completed';
     } catch (error) {
-      console.log('Invalid date for task:', task.id);
+      // console.log('Invalid date for task:', task.id);
       return false;
     }
   }).length || 0;
@@ -464,23 +477,34 @@ const TaskCards = () => {
               <Text style={[styles.inputLabel, { color: theme.text }]}>
                 {t('taskcards.dueDateLabel')}
               </Text>
-              <TextInput
+              <TouchableOpacity 
                 style={[
-                  styles.textInput, 
+                  styles.datePickerButton, 
                   { 
                     backgroundColor: theme.inputBackground,
-                    color: theme.text,
                     borderColor: theme.border,
                   }
                 ]}
-                value={dueDateString}
-                onChangeText={handleDateChange}
-                placeholder="MM/DD/YYYY"
-                placeholderTextColor={theme.placeholderText}
-                keyboardType="numeric"
-                maxLength={10}
-                editable={!addingTask}
-              />
+                onPress={showDatepicker}
+                disabled={addingTask}
+              >
+                <Text style={[styles.datePickerText, { color: theme.text }]}>
+                  {dueDateString}
+                </Text>
+                <Icon name="calendar" size={20} color={theme.text} />
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={dueDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateChange}
+                  minimumDate={new Date()}
+                  themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                />
+              )}
             </View>
 
             <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
@@ -689,6 +713,19 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  datePickerButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    height: 40,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  datePickerText: {
+    fontSize: 14,
   },
 });
 

@@ -5,12 +5,31 @@ import axiosInstance from './axiosinstance';
 const TOKEN_KEY = '@auth_token';
 const USER_KEY = '@user_data';
 
+// Clear corrupted data
+const clearCorruptedData = async () => {
+  try {
+    await AsyncStorage.removeItem(TOKEN_KEY);
+    await AsyncStorage.removeItem(USER_KEY);
+  } catch (error) {
+    console.error('Error clearing corrupted data:', error);
+  }
+};
+
 const storeAuthData = async (token, userData) => {
   try {
+    // Store only essential user data
+    const essentialUserData = {
+      id: userData.id || userData._id,
+      fullname: userData.fullname,
+      email: userData.email,
+      role: userData.role
+    };
+
     await AsyncStorage.setItem(TOKEN_KEY, token);
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(essentialUserData));
   } catch (error) {
     console.error('Error storing auth data:', error);
+    await clearCorruptedData();
     throw new Error('Failed to store authentication data');
   }
 };
@@ -90,20 +109,44 @@ export const emailSignup = async (email, password, name) => {
 export const getCurrentUser = async () => {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
-    const userData = await AsyncStorage.getItem(USER_KEY);
-
-    if (!token || !userData) {
+    if (!token) {
       return null;
     }
 
-    if (!validateToken(token)) {
-      await logout();
+    try {
+      const userData = await AsyncStorage.getItem(USER_KEY);
+      if (!userData) {
+        return null;
+      }
+
+      // Parse the stored essential user data
+      const parsedUserData = JSON.parse(userData);
+      
+      // Fetch complete user data from server if needed
+      try {
+        const response = await axiosInstance.get(`/users/${parsedUserData.id}`, {
+          params: {
+            fields: 'id,fullname,email,role'
+          }
+        });
+        if (response.data && response.data.user) {
+          return response.data.user;
+        }
+      } catch (error) {
+        console.error('Error fetching complete user data:', error);
+        // Return the essential data if server fetch fails
+        return parsedUserData;
+      }
+
+      return parsedUserData;
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+      await clearCorruptedData();
       return null;
     }
-
-    return JSON.parse(userData);
   } catch (error) {
     console.error('Error getting current user:', error);
+    await clearCorruptedData();
     return null;
   }
 };
@@ -128,7 +171,7 @@ export const logout = async () => {
     // First call the Firebase signOut to handle Google sign out properly
     try {
       await firebaseSignOut();
-      console.log('Firebase user signed out successfully');
+      // console.log('Firebase user signed out successfully');
     } catch (firebaseError) {
       console.error('Firebase sign out error:', firebaseError);
       // Continue with local logout even if Firebase logout fails
@@ -191,30 +234,47 @@ export const verifyResetToken = async (token) => {
 export const checkAuthStatus = async (navigation) => {
   try {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
-    const userData = await AsyncStorage.getItem(USER_KEY);
-
-    if (!token || !userData) {
-      console.log('No auth token found, redirecting to login');
+    if (!token) {
       navigation.replace('Login');
       return false;
     }
 
     if (!validateToken(token)) {
-      console.log('Invalid token format, logging out');
-      await AsyncStorage.removeItem(TOKEN_KEY);
-      await AsyncStorage.removeItem(USER_KEY);
+      await clearCorruptedData();
       navigation.replace('Login');
       return false;
     }
 
-    axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    try {
+      const userData = await AsyncStorage.getItem(USER_KEY);
+      if (!userData) {
+        await clearCorruptedData();
+        navigation.replace('Login');
+        return false;
+      }
 
-    console.log('Token and user data found, proceeding to dashboard');
-    navigation.replace('DashboardTabs');
-    return true;
+      // Try to parse the user data
+      try {
+        JSON.parse(userData);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        await clearCorruptedData();
+        navigation.replace('Login');
+        return false;
+      }
 
+      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      navigation.replace('DashboardTabs');
+      return true;
+    } catch (error) {
+      console.error('Error checking user data:', error);
+      await clearCorruptedData();
+      navigation.replace('Login');
+      return false;
+    }
   } catch (error) {
     console.error('Error checking auth status:', error);
+    await clearCorruptedData();
     navigation.replace('Login');
     return false;
   }

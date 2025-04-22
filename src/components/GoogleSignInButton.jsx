@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     flex: 1,
-    color: '#757575', // Dark gray
+    color: '#757575',
     fontSize: 15,
     fontWeight: '500',
     textAlign: 'center',

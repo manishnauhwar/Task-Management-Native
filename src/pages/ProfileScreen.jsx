@@ -1,5 +1,4 @@
-// ProfileScreen.js
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, StatusBar, ActivityIndicator, Alert } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../utils/ThemeContext';
@@ -12,7 +11,8 @@ import { useTranslation } from 'react-i18next';
 import UserStats from '../components/profile/UserStats';
 import AdminUserManagement from '../components/profile/AdminUserManagement';
 import ProfileDetails from '../components/profile/ProfileDetails';
-// import ManagerTeamManagement from '../components/profile/ManagerTeamManagement';
+import ManagerTeamManagement from '../components/profile/ManagerTeamManagement';
+
 
 const ProfileScreen = () => {
   const { t } = useTranslation();
@@ -24,6 +24,60 @@ const ProfileScreen = () => {
   const [allUsers, setAllUsers] = useState([]);
   const [teams, setTeams] = useState([]);
   const [error, setError] = useState(null);
+  const [profilePicture, setProfilePicture] = useState(null);
+
+  const getApiBaseUrl = () => {
+    return axiosInstance.defaults.baseURL;
+  };
+
+  const getProfilePictureUrl = (userData) => {
+    if (!userData) return null;
+
+    // First check for Google profile picture
+    if (userData.googleProfilePictureUrl) {
+      return userData.googleProfilePictureUrl;
+    }
+
+    // Then check for profile picture URL
+    if (userData.profilePictureUrl) {
+      if (userData.profilePictureUrl.startsWith('data:') || userData.profilePictureUrl.startsWith('http')) {
+        return userData.profilePictureUrl;
+      }
+      return getApiBaseUrl() + (userData.profilePictureUrl.startsWith('/') ? '' : '/') + userData.profilePictureUrl;
+    }
+
+    //check for binary profile picture data
+    if (userData.profilePicture && userData.profilePicture.data) {
+      return `${getApiBaseUrl()}/users/${userData.id}/profile-picture`;
+    }
+
+    return null;
+  };
+
+  const processUserData = (userData) => {
+    if (!userData) return null;
+
+    const userId = userData.id || userData._id;
+    if (!userId) return null;
+
+    return {
+      ...userData,
+      id: userId,
+      googleProfilePictureUrl: userData.googleProfilePictureUrl,
+      profilePictureUrl: userData.profilePictureUrl,
+      profilePicture: userData.profilePicture
+    };
+  };
+
+  const updateProfilePicture = (userData) => {
+    if (!userData) {
+      return;
+    }
+    
+    
+    const pictureUrl = getProfilePictureUrl(userData);
+    setProfilePicture(pictureUrl);
+  };
 
   const fetchUserData = useCallback(async () => {
     try {
@@ -44,60 +98,71 @@ const ProfileScreen = () => {
 
       const parsedUserData = JSON.parse(userData);
       
-      setUser(parsedUserData);
+      const processedUserData = processUserData(parsedUserData);
       
-      const userId = parsedUserData.id || parsedUserData._id;
-      
-      if (!userId) {
+      if (!processedUserData) {
         setError(t('profile.errorUserIdNotFound'));
         setLoading(false);
         return;
       }
 
+      setUser(processedUserData);
+      updateProfilePicture(processedUserData);
+      
       try {
-        const response = await axiosInstance.get(`/users/${userId}`);
+        const response = await axiosInstance.get(`/users/${processedUserData.id}`, {
+          params: {
+            fields: 'id,fullname,email,role,googleProfilePictureUrl,profilePictureUrl,profilePicture'
+          }
+        });
 
         if (response.data && response.data.user) {
           const fetchedUserData = response.data.user;
-
-          if (!fetchedUserData.id && fetchedUserData._id) {
-            fetchedUserData.id = fetchedUserData._id;
-          }
+          const processedFetchedData = processUserData(fetchedUserData);
 
           const updatedUserData = {
-            ...fetchedUserData,
-            id: fetchedUserData.id || fetchedUserData._id || userId,
-            googleProfilePictureUrl: fetchedUserData.googleProfilePictureUrl || parsedUserData.googleProfilePictureUrl,
-            profilePictureUrl: fetchedUserData.profilePictureUrl || parsedUserData.profilePictureUrl,
-            fullname: fetchedUserData.fullname || parsedUserData.fullname,
-            email: fetchedUserData.email || parsedUserData.email,
-            role: fetchedUserData.role || parsedUserData.role
+            ...processedFetchedData,
+            googleProfilePictureUrl: processedFetchedData.googleProfilePictureUrl || processedUserData.googleProfilePictureUrl,
+            profilePictureUrl: processedFetchedData.profilePictureUrl || processedUserData.profilePictureUrl,
+            profilePicture: processedFetchedData.profilePicture || processedUserData.profilePicture,
+            fullname: processedFetchedData.fullname || processedUserData.fullname,
+            email: processedFetchedData.email || processedUserData.email,
+            role: processedFetchedData.role || processedUserData.role
           };
 
-          // Update AsyncStorage with the latest data
-          await AsyncStorage.setItem('@user_data', JSON.stringify(updatedUserData));
+          // Store only essential data in AsyncStorage
+          const essentialUserData = {
+            id: updatedUserData.id,
+            fullname: updatedUserData.fullname,
+            email: updatedUserData.email,
+            role: updatedUserData.role,
+            googleProfilePictureUrl: updatedUserData.googleProfilePictureUrl,
+            profilePictureUrl: updatedUserData.profilePictureUrl
+          };
+          await AsyncStorage.setItem('@user_data', JSON.stringify(essentialUserData));
 
-          // Update the state with the latest user data
           setUser(updatedUserData);
+          updateProfilePicture(updatedUserData);
 
-          // Fetch role-specific data
           if (updatedUserData.role === 'user') {
             await fetchTaskData(updatedUserData);
           } else if (updatedUserData.role === 'admin') {
             await fetchAllUsers();
           } else if (updatedUserData.role === 'manager') {
             await fetchTaskData(updatedUserData);
+            await fetchTeams(updatedUserData);
           }
         }
       } catch (error) {
         console.error('Error fetching user details:', error);
         
-        if (parsedUserData.role === 'user') {
-          await fetchTaskData(parsedUserData);
-        } else if (parsedUserData.role === 'admin') {
+        if (processedUserData.role === 'user') {
+          await fetchTaskData(processedUserData);
+        } else if (processedUserData.role === 'admin') {
           await fetchAllUsers();
-        } else if (parsedUserData.role === 'manager') {
-          await fetchTaskData(parsedUserData);
+        } else if (processedUserData.role === 'manager') {
+          await fetchTaskData(processedUserData);
+          await fetchTeams(processedUserData);
         }
       }
     } catch (error) {
@@ -144,9 +209,35 @@ const ProfileScreen = () => {
 
   const fetchAllUsers = async () => {
     try {
-      const response = await axiosInstance.get('/users/alluser', {
-        params: { fields: 'id,fullname,email,role' }
-      });
+      console.log('Fetching all users...');
+      
+      // First check if we can get a limited response directly
+      try {
+        const response = await axiosInstance.get('/users/alluser', {
+          params: { fields: 'id,fullname,email,role' }
+        });
+
+        if (response.data && Array.isArray(response.data.allUsers)) {
+          console.log(`Received ${response.data.allUsers.length} users`);
+          
+          // Process the data with only necessary fields to minimize memory usage
+          const standardizedUsers = response.data.allUsers.map(u => ({
+            id: u.id || u._id,
+            fullname: u.fullname,
+            email: u.email,
+            role: u.role
+          }));
+          
+          console.log('Setting users in state...');
+          setAllUsers(standardizedUsers);
+          return;
+        }
+      } catch (paramError) {
+        console.log('Could not fetch with params, trying basic request');
+      }
+
+      // Then try to fetch all users without params
+      const response = await axiosInstance.get('/users/alluser');
 
       if (response.data && Array.isArray(response.data.allUsers)) {
         const standardizedUsers = response.data.allUsers.map(u => ({
@@ -159,6 +250,9 @@ const ProfileScreen = () => {
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      if (error.response) {
+        console.error('Error status:', error.response.status);
+      }
       setError(t('profile.errorLoadUserList'));
     }
   };
@@ -173,22 +267,22 @@ const ProfileScreen = () => {
         setTeams(managedTeams);
       }
     } catch (error) {
+      console.error('Error fetching teams:', error);
       setError(t('profile.errorLoadTeams'));
     }
   };
 
-  // Use useFocusEffect to reload data when the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       fetchUserData();
       return () => {
-        // Cleanup when screen is unfocused (optional)
       };
     }, [fetchUserData])
   );
 
   const handleProfileUpdate = (updatedUser) => {
     setUser(updatedUser);
+    updateProfilePicture(updatedUser);
 
     if (updatedUser.role === 'user') {
       fetchTaskData(updatedUser);
@@ -207,6 +301,14 @@ const ProfileScreen = () => {
   const handleTeamsUpdate = (updatedTeams) => {
     setTeams(updatedTeams);
   };
+
+  // Force a fetch when role changes to admin
+  useEffect(() => {
+    if (user && user.role === 'admin') {
+      console.log('User is admin, fetching all users...');
+      fetchAllUsers();
+    }
+  }, [user?.role]);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -231,57 +333,118 @@ const ProfileScreen = () => {
             style={[styles.retryButton, { backgroundColor: theme.primary }]}
             onPress={fetchUserData}
           >
-            <Text style={{ color: '#fff' }}>{  t('profile.retry')}</Text>
+            <Text style={{ color: '#fff' }}>{ t('profile.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          {user && user.fullname ? (
-            <View style={[styles.section, {
-              backgroundColor: theme.cardBackground,
-              shadowColor: theme.shadowColor,
-            }]}>
-              {/* Profile Details Component - Show for all user roles */}
-              <ProfileDetails
-                user={user}
-                theme={theme}
-                onProfileUpdate={handleProfileUpdate}
-              />
+        // For user and admin roles, use ScrollView
+        user && user.role !== 'manager' ? (
+          <ScrollView 
+            style={styles.scrollContainer}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContentContainer}
+          >
+            <View style={styles.container}>
+              {user && user.fullname ? (
+                <View style={[styles.section, {
+                  backgroundColor: theme.cardBackground,
+                  shadowColor: theme.shadowColor,
+                }]}>
+                  <ProfileDetails
+                    user={user}
+                    theme={theme}
+                    onProfileUpdate={handleProfileUpdate}
+                    profilePicture={profilePicture}
+                    setProfilePicture={setProfilePicture}
+                  />
 
-              {/* User Stats Component - Show only for users */}
-              {user.role === 'user' && (
-                <UserStats tasks={tasks} theme={theme} />
+                  {/* User Stats Component - Show only for users */}
+                  {user.role === 'user' && (
+                    <UserStats tasks={tasks} theme={theme} />
+                  )}
+                </View>
+              ) : (
+                <View style={styles.errorContainer}>
+                  <Icon name="error-outline" size={48} color={theme.error} />
+                  <Text style={[styles.errorText, { color: theme.error }]}>
+                    {t('profile.noUserDataAvailable')}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.retryButton, { backgroundColor: theme.primary }]}
+                    onPress={fetchUserData}
+                  >
+                    <Text style={{ color: '#fff' }}>{t('profile.retry')}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Admin User Management Component - Only for admins */}
+              {user && user.role === 'admin' && (
+                <View style={[styles.section, {
+                  backgroundColor: theme.cardBackground,
+                  shadowColor: theme.shadowColor,
+                  marginTop: 15,
+                  marginBottom: 20,
+                }]}>
+                  <AdminUserManagement
+                    allUsers={allUsers}
+                    theme={theme}
+                    onUsersUpdate={(updatedUsers) => {
+                      console.log(`Updating users list with ${updatedUsers.length} users`);
+                      setAllUsers(updatedUsers);
+                    }}
+                  />
+                </View>
               )}
             </View>
-          ) : (
-            <View style={styles.errorContainer}>
-              <Icon name="error-outline" size={48} color={theme.error} />
-              <Text style={[styles.errorText, { color: theme.error }]}>
-                {t('profile.noUserDataAvailable')}
-              </Text>
-              <TouchableOpacity
-                style={[styles.retryButton, { backgroundColor: theme.primary }]}
-                onPress={fetchUserData}
-              >
-                <Text style={{ color: '#fff' }}>{t('profile.retry')}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          </ScrollView>
+        ) : (
+          // For manager role, use View since ManagerTeamManagement already has FlatLists
+          <View style={styles.container}>
+            {user && user.fullname ? (
+              <View style={[styles.section, {
+                backgroundColor: theme.cardBackground,
+                shadowColor: theme.shadowColor,
+              }]}>
+                <ProfileDetails
+                  user={user}
+                  theme={theme}
+                  onProfileUpdate={handleProfileUpdate}
+                  profilePicture={profilePicture}
+                  setProfilePicture={setProfilePicture}
+                />
+              </View>
+            ) : (
+              <View style={styles.errorContainer}>
+                <Icon name="error-outline" size={48} color={theme.error} />
+                <Text style={[styles.errorText, { color: theme.error }]}>
+                  {t('profile.noUserDataAvailable')}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.retryButton, { backgroundColor: theme.primary }]}
+                  onPress={fetchUserData}
+                >
+                  <Text style={{ color: '#fff' }}>{t('profile.retry')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-          {/* Admin User Management Component - Only for admins */}
-          {user && user.role === 'admin' && (
-            <View style={[styles.section, {
-              backgroundColor: theme.cardBackground,
-              shadowColor: theme.shadowColor,
-            }]}>
-              <AdminUserManagement
-                allUsers={allUsers}
-                theme={theme}
-                onUsersUpdate={(updatedUsers) => setAllUsers(updatedUsers)}
-              />
-            </View>
-          )}
-        </ScrollView>
+            {/* Manager Team Management Component - Only for managers */}
+            {user && user.role === 'manager' && (
+              <View style={[styles.managerSection, {
+                backgroundColor: theme.cardBackground,
+                shadowColor: theme.shadowColor,
+              }]}>
+                <ManagerTeamManagement
+                  teams={teams}
+                  user={user}
+                  theme={theme}
+                  onTeamsUpdate={handleTeamsUpdate}
+                />
+              </View>
+            )}
+          </View>
+        )
       )}
     </SafeAreaView>
   );
@@ -303,10 +466,27 @@ const styles = StyleSheet.create({
     marginLeft: 15,
   },
   scrollContainer: {
-    padding: 15,
+    flex: 1,
+  },
+  scrollContentContainer: {
     flexGrow: 1,
+    paddingBottom: 30,
+  },
+  container: {
+    flex: 1,
+    padding: 15,
   },
   section: {
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 15,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  managerSection: {
+    flex: 1,
     borderRadius: 10,
     padding: 15,
     marginBottom: 15,

@@ -41,8 +41,6 @@ const LoginScreen = ({ navigation }) => {
       setError('');
 
       const { token, user } = await emailLogin(email, password);
-
-      console.log('Login successful:', user);
       navigation.replace('DashboardTabs');
     } catch (err) {
       console.error('Login error:', err);
@@ -58,7 +56,6 @@ const LoginScreen = ({ navigation }) => {
 
   const handleGoogleLoginFailure = (errorMessage) => {
     if (errorMessage.includes('cancelled')) {
-      // User cancelled, don't show error
       return;
     }
     setError(errorMessage);

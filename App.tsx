@@ -164,7 +164,7 @@ const App = () => {
   useEffect(() => {
     // Check if Firebase is already initialized using modular API
     if (getApps().length) {
-      console.log('Firebase initialized');
+      // console.log('Firebase initialized');
     }
   }, []);
 

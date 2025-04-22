@@ -152,7 +152,7 @@ const Charts = () => {
       dueDate.setHours(0, 0, 0, 0);
       return dueDate < today && task.status?.toLowerCase() !== 'completed';
     } catch (error) {
-      console.log('Invalid date for task:', task.id);
+      // console.error('Invalid date for task:', task.id);
       return false;
     }
   }).length || 0;

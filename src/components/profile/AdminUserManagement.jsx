@@ -7,7 +7,6 @@ import {
   Modal,
   TextInput,
   Alert,
-  ScrollView,
   ActivityIndicator
 } from 'react-native';
 import axiosInstance from '../../utils/axiosinstance';
@@ -46,7 +45,12 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
       setLoading(true);
       const response = await axiosInstance.post(
         '/users/admin/create-user',
-        newUserData
+        {
+          fullname: newUserData.fullname,
+          email: newUserData.email,
+          password: newUserData.password,
+          role: newUserData.role
+        }
       );
       if (response.status === 201) {
         const u = response.data.user;
@@ -85,7 +89,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
         email: selectedUserData.email,
         role: selectedUserData.role
       };
-      if (selectedUserData.password.trim()) {
+      if (selectedUserData.password && selectedUserData.password.trim()) {
         updateData.password = selectedUserData.password;
       }
       const response = await axiosInstance.put(
@@ -152,115 +156,139 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 20 }]}>
-        {t('userManagement.title')}
-      </Text>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: theme.primary, marginTop: 15 }]}
-        onPress={() => {
-          setNewUserData({ fullname: '', email: '', password: '', role: 'user' });
-          setIsNewUser(true);
-          setUserModalOpen(true);
-        }}
-        disabled={loading}
-      >
-        <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-          {t('userManagement.addNewUser')}
-        </Text>
-      </TouchableOpacity>
-
-      <View style={[styles.contentCard, {
-        backgroundColor: theme.inputBackground,
-        borderColor: theme.border,
-      }]}>
-        {allUsers.length === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.text }]}>
-            {t('userManagement.noUsersFound')}
+    <View style={styles.container}>
+      <View style={[styles.header, { borderBottomColor: theme.border, backgroundColor: theme.cardBackground }]}>
+        <View style={styles.headerTitleContainer}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>
+            {t('userManagement.title')}
           </Text>
+          <Text style={[styles.usersCount, { color: theme.textSecondary }]}>
+            {Array.isArray(allUsers) ? allUsers.length : 0} {t('userManagement.usersTotal')}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.addButton, { backgroundColor: theme.primary }]}
+          onPress={() => {
+            setNewUserData({ fullname: '', email: '', password: '', role: 'user' });
+            setIsNewUser(true);
+            setUserModalOpen(true);
+          }}
+          disabled={loading}
+        >
+          <Text style={[styles.buttonText, { color: theme.buttonText }]}>
+            + {t('userManagement.addNew')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.contentContainer}>
+        {(!Array.isArray(allUsers) || allUsers.length === 0) ? (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: theme.text }]}>
+              {t('userManagement.noUsersFound')}
+            </Text>
+          </View>
         ) : (
           <>
-            {paginatedUsers.map(item => (
-              <View
-                key={item.id.toString()}
-                style={[styles.userItem, { borderBottomColor: theme.border }]}
-              >
-                <View style={styles.userInfo}>
-                  <Text style={[styles.userName, { color: theme.text }]}>
-                    {item.fullname}
-                  </Text>
-                  <Text style={[styles.userEmail, { color: theme.text }]}>
-                    {item.email}
-                  </Text>
-                  <View style={[styles.roleBadge, {
-                    backgroundColor:
-                      item.role === 'admin'
-                        ? theme.danger + '15'
-                        : item.role === 'manager'
-                          ? theme.warning + '15'
-                          : theme.success + '15'
-                  }]}>
-                    <Text style={[styles.roleText, {
-                      color:
-                        item.role === 'admin'
-                          ? theme.danger
-                          : item.role === 'manager'
-                            ? theme.warning
-                            : theme.success
-                    }]}>
-                      {t(`userManagement.roles.${item.role}`)}
+            <View style={styles.paginationInfo}>
+              <Text style={[styles.paginationText, { color: theme.textSecondary }]}>
+                {t('userManagement.pageInfo', { current: currentPage, total: totalPages })}
+              </Text>
+            </View>
+            
+            <View style={styles.usersList}>
+              {paginatedUsers.map(item => (
+                <View
+                  key={item.id.toString()}
+                  style={[styles.userCard, { 
+                    backgroundColor: theme.cardBackground,
+                    shadowColor: theme.shadowColor,
+                    borderColor: theme.border
+                  }]}
+                >
+                  <View style={styles.userInfo}>
+                    <Text style={[styles.userName, { color: theme.text }]}>
+                      {item.fullname}
                     </Text>
+                    <Text style={[styles.userEmail, { color: theme.textSecondary }]}>
+                      {item.email}
+                    </Text>
+                    <View style={[styles.roleBadge, {
+                      backgroundColor:
+                        item.role === 'admin'
+                          ? theme.danger + '20'
+                          : item.role === 'manager'
+                            ? theme.warning + '20'
+                            : theme.success + '20'
+                    }]}>
+                      <Text style={[styles.roleText, {
+                        color:
+                          item.role === 'admin'
+                            ? theme.danger
+                            : item.role === 'manager'
+                              ? theme.warning
+                              : theme.success
+                      }]}>
+                        {t(`userManagement.roles.${item.role}`)}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.userActions}>
+                    {actionLoading === item.id ? (
+                      <ActivityIndicator size="small" color={theme.primary} />
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.actionButton, { borderColor: theme.primary, backgroundColor: theme.primary + '10' }]}
+                          onPress={() => {
+                            setSelectedUserData({ ...item, password: '' });
+                            setIsNewUser(false);
+                            setUserModalOpen(true);
+                          }}
+                          disabled={loading}
+                        >
+                          <Text style={{ color: theme.primary, fontWeight: '500' }}>
+                            {t('userManagement.edit')}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={[styles.actionButton, { borderColor: theme.danger, backgroundColor: theme.danger + '10' }]}
+                          onPress={() => handleDeleteUser(item.id)}
+                          disabled={loading}
+                        >
+                          <Text style={{ color: theme.danger, fontWeight: '500' }}>
+                            {t('userManagement.delete')}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </View>
-                <View style={styles.userActions}>
-                  {actionLoading === item.id ? (
-                    <ActivityIndicator size="small" color={theme.primary} />
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedUserData({ ...item, password: '' });
-                          setIsNewUser(false);
-                          setUserModalOpen(true);
-                        }}
-                        disabled={loading}
-                      >
-                        <Text style={{ color: theme.primary }}>
-                          {t('userManagement.edit')}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        onPress={() => handleDeleteUser(item.id)}
-                        disabled={loading}
-                      >
-                        <Text style={{ color: theme.danger }}>
-                          {t('userManagement.delete')}
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-              </View>
-            ))}
-            <View style={styles.paginationContainer}>
+              ))}
+            </View>
+            
+            <View style={[styles.paginationContainer, { borderTopColor: theme.border }]}>
               <TouchableOpacity
+                style={[styles.paginationButton, { 
+                  backgroundColor: currentPage === 1 ? theme.inputBackground : theme.primary + '15',
+                  opacity: currentPage === 1 || loading ? 0.5 : 1 
+                }]}
                 onPress={goToPrevPage}
                 disabled={currentPage === 1 || loading}
-                style={{ opacity: currentPage === 1 || loading ? 0.5 : 1 }}
               >
-                <Text style={{ color: theme.primary }}>
+                <Text style={{ color: theme.primary, fontWeight: '500' }}>
                   {t('userManagement.prev')}
                 </Text>
               </TouchableOpacity>
-              <Text style={{ color: theme.text }}>
-                {t('userManagement.pageInfo', { current: currentPage, total: totalPages })}
-              </Text>
               <TouchableOpacity
+                style={[styles.paginationButton, { 
+                  backgroundColor: currentPage === totalPages ? theme.inputBackground : theme.primary + '15',
+                  opacity: currentPage === totalPages || loading ? 0.5 : 1 
+                }]}
                 onPress={goToNextPage}
                 disabled={currentPage === totalPages || loading}
-                style={{ opacity: currentPage === totalPages || loading ? 0.5 : 1 }}
               >
-                <Text style={{ color: theme.primary }}>
+                <Text style={{ color: theme.primary, fontWeight: '500' }}>
                   {t('userManagement.next')}
                 </Text>
               </TouchableOpacity>
@@ -351,7 +379,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                             : role === 'manager'
                               ? 'warning'
                               : 'success'
-                          ] + '15'
+                          ] + '20'
                         : theme.inputBackground,
                       borderColor: theme.border
                     }]}
@@ -423,7 +451,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 };
 
@@ -432,40 +460,84 @@ export default AdminUserManagement;
 const styles = StyleSheet.create({
   container: { 
     flex: 1,
-    paddingHorizontal: 15 // Add padding to align with button
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  headerTitleContainer: {
+    flexDirection: 'column',
   },
   sectionTitle: { 
     fontSize: 20, 
     fontWeight: 'bold',
-    marginBottom: 15
   },
-  button: { 
-    padding: 10, 
+  usersCount: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  contentContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  addButton: { 
+    paddingHorizontal: 16,
+    paddingVertical: 8, 
     borderRadius: 8, 
     alignItems: 'center',
-    marginBottom: 15
+    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
   },
-  buttonText: { fontSize: 16 },
-  contentCard: { 
-    padding: 10, 
-    borderWidth: 1, 
-    borderRadius: 8 
+  buttonText: { 
+    fontSize: 14,
+    fontWeight: '600' 
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 200
   },
   emptyText: { 
     fontSize: 16, 
-    textAlign: 'center', 
-    marginVertical: 20 
+    textAlign: 'center'
   },
-  userItem: { 
+  paginationInfo: {
+    alignItems: 'flex-end',
+    marginBottom: 15
+  },
+  paginationText: {
+    fontSize: 13
+  },
+  usersList: {
+    marginBottom: 20
+  },
+  userCard: { 
     flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingVertical: 10,
-    borderBottomWidth: 1
+    justifyContent: 'space-between',
+    alignItems: 'center', 
+    padding: 16,
+    marginBottom: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1
   },
   userInfo: { flex: 1 },
   userName: { 
     fontSize: 16, 
-    fontWeight: '500' 
+    fontWeight: '600' 
   },
   userEmail: { 
     fontSize: 14,
@@ -476,25 +548,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    marginTop: 4
+    marginTop: 8
   },
   roleText: { 
     fontSize: 12, 
-    fontWeight: '500' 
+    fontWeight: '600' 
   },
   userActions: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    gap: 15,
+    gap: 10,
     marginLeft: 10
+  },
+  actionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1
   },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 15,
-    paddingTop: 15,
+    paddingVertical: 15,
     borderTopWidth: 1
+  },
+  paginationButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 6
   },
   modalWrapper: {
     flex: 1,
@@ -503,38 +584,74 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     margin: 20,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 20,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
     elevation: 5
   },
-  modalTitle: { fontSize: 18, fontWeight: '600', marginBottom: 15 },
+  modalTitle: { 
+    fontSize: 20, 
+    fontWeight: '600', 
+    marginBottom: 20,
+    textAlign: 'center'
+  },
   input: {
     borderWidth: 1,
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 10
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12
   },
-  inputLabel: { fontSize: 14, marginBottom: 6 },
-  roleSelection: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 15 },
+  inputLabel: { 
+    fontSize: 15, 
+    fontWeight: '500',
+    marginBottom: 8 
+  },
+  roleSelection: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-around', 
+    marginBottom: 20 
+  },
   roleOption: {
-    padding: 8,
+    padding: 10,
+    paddingHorizontal: 20,
     borderWidth: 1,
-    borderRadius: 6
+    borderRadius: 8
   },
-  roleOptionText: { fontSize: 14 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
+  roleOptionText: { 
+    fontSize: 14,
+    fontWeight: '500'
+  },
+  modalButtons: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between',
+    marginTop: 10
+  },
   modalButton: {
     flex: 1,
     padding: 12,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
-    marginRight: 5
+    marginRight: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2
   },
   cancelModalButton: {
     flex: 1,
     padding: 12,
-    borderRadius: 6,
+    borderRadius: 8,
     alignItems: 'center',
-    marginLeft: 5
+    marginLeft: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  modalButtonText: { 
+    fontSize: 16,
+    fontWeight: '500'
   }
 });
