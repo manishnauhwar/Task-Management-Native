@@ -277,25 +277,20 @@ const TaskTable = ({
       setIsEditing(true);
       if (!selectedTask) return;
       
-      // Check due date against current date to determine status
       let updatedStatus = selectedTask.status;
       if (selectedTask.dueDate) {
         const dueDate = new Date(selectedTask.dueDate);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        // If due date is in the future and task is not completed
         if (dueDate > today && selectedTask.status.toLowerCase() !== 'completed') {
-          // If due date is today or approaching (within 7 days), set to In Progress
           const daysDifference = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
           if (daysDifference <= 7) {
-            updatedStatus = 'In Progress';
+            updatedStatus = 'In progress';
           } else {
-            // Otherwise, it's To Do (further in the future)
             updatedStatus = 'To Do';
           }
         } else if (dueDate < today && selectedTask.status.toLowerCase() !== 'completed') {
-          // If due date is in the past and not completed, it's overdue
           updatedStatus = 'overdue';
         }
       }
@@ -770,6 +765,46 @@ const TaskTable = ({
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.header.status')}
+                  </Text>
+                  <View style={styles.priorityButtons}>
+                    {['To Do', 'In Progress', 'Completed'].map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        style={[
+                          styles.priorityButton,
+                          { 
+                            backgroundColor: selectedTask?.status?.toLowerCase() === s.toLowerCase() ? getStatusColor(s) : theme.inputBackground,
+                            borderColor: theme.border,
+                            opacity: isEditing ? 0.7 : 1,
+                            minHeight: 36,
+                            height: 'auto',
+                            paddingVertical: 10,
+                          }
+                        ]}
+                        onPress={() => !isEditing && setSelectedTask(prev => ({...prev, status: s}))}
+                        disabled={isEditing || selectedTask?.status?.toLowerCase() === 'overdue'}
+                      >
+                        <Text 
+                          style={[
+                            styles.priorityButtonText,
+                            { color: selectedTask?.status?.toLowerCase() === s.toLowerCase() ? theme.buttonText : theme.text }
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          {s}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {selectedTask?.status?.toLowerCase() === 'overdue' && (
+                    <Text style={[styles.overdueBadge, { color: getStatusColor('overdue') }]}>
+                      {t('taskTable.status.overdue')}
+                    </Text>
+                  )}
 
                   <Text style={[styles.inputLabel, { color: theme.text }]}>
                     {t('taskTable.input.dueDate')}
@@ -1421,6 +1456,14 @@ const styles = StyleSheet.create({
   },
   datePickerText: {
     fontSize: 14,
+  },
+  overdueBadge: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: -8,
+    marginBottom: 8,
+    textAlign: 'right',
+    fontStyle: 'italic',
   },
 });
 

@@ -56,9 +56,9 @@ const TaskCard = ({ task, theme }) => {
 
   const statusOptions = [
     { title: t('taskCard.statusOption.toDo', 'To Do'), status: "To Do", color: "#3498db" },
-    { title: t('taskCard.statusOption.inProgress', 'In Progress'), status: "In progress", color: "#f39c12" },
+    { title: t('taskCard.statusOption.inProgress', 'In Progress'), status: "In Progress", color: "#f39c12" },
     { title: t('taskCard.statusOption.completed', 'Completed'), status: "Completed", color: "#2ecc71" }
-  ].filter(option => option.status !== task.status);
+  ].filter(option => option.status.toLowerCase() !== task.status?.toLowerCase());
 
   const formatDate = dateString => dateString ? new Date(dateString).toLocaleDateString() : t('taskCard.noDueDate', 'No due date');
   const getPriorityColor = priority => {
@@ -126,7 +126,7 @@ const StatusPage = ({ route }) => {
   const { status, statusColor } = route.params;
   const { tasks } = useContext(TasksContext);
   const navigation = useNavigation();
-  const filteredTasks = tasks.filter(task => task.status === status);
+  const filteredTasks = tasks.filter(task => task.status?.toLowerCase() === status.toLowerCase());
 
   const getTabBarWithGestureSpacing = () => {
     const tabBarHeight = 60;
@@ -191,7 +191,7 @@ const KanbanBoardMain = () => {
 
   const statusOptions = [
     { title: t('kanban.status.toDo', 'To Do'), status: "To Do", color: "#3498db" },
-    { title: t('kanban.status.inProgress', 'In Progress'), status: "In progress", color: "#f39c12" },
+    { title: t('kanban.status.inProgress', 'In Progress'), status: "In Progress", color: "#f39c12" },
     { title: t('kanban.status.completed', 'Completed'), status: "Completed", color: "#2ecc71" }
   ];
   const navigateToStatus = (status, color) => navigation.navigate("StatusPage", { status, statusColor: color });
@@ -224,7 +224,9 @@ const KanbanBoardMain = () => {
             <Text style={[styles.statsTitle, { color: theme.text }]}>{t('kanban.tasksOverview', 'Tasks Overview')}</Text>
             <View style={styles.statCards}>
               {statusOptions.map(option => {
-                const count = tasks.filter(task => task.status === option.status).length;
+                const count = tasks.filter(task => 
+                  task.status?.toLowerCase() === option.status.toLowerCase()
+                ).length;
                 return (
                   <TouchableOpacity
                     key={option.status}

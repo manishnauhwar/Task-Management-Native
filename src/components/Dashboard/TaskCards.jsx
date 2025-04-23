@@ -365,7 +365,7 @@ const TaskCards = () => {
             <Card style={[styles.card, { backgroundColor: cardColors.inProgress }]}>
               <Card.Content style={styles.cardContent}>
                 <Icon name="progress-clock" size={24} color="#fff" style={styles.cardIcon} />
-                <Text style={styles.cardTitle}>{t('taskcards.inprogress')}</Text>
+                <Text style={styles.cardTitle}>{t('taskcards.pendingTasks')}</Text>
                 <Text style={styles.cardValue}>{inProgressTasks}</Text>
               </Card.Content>
             </Card>

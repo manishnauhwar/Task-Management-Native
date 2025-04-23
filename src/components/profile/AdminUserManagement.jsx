@@ -364,7 +364,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
               {t('userManagement.role')}
             </Text>
             <View style={styles.roleSelection}>
-              {['user', 'manager', 'admin'].map(role => {
+              {['user', 'manager'].map(role => {
                 const selectedRole = isNewUser
                   ? newUserData.role
                   : selectedUserData?.role;
@@ -374,9 +374,7 @@ const AdminUserManagement = ({ allUsers, theme, onUsersUpdate }) => {
                     key={role}
                     style={[styles.roleOption, {
                       backgroundColor: isSelected
-                        ? theme[role === 'admin'
-                            ? 'danger'
-                            : role === 'manager'
+                        ? theme[role === 'manager'
                               ? 'warning'
                               : 'success'
                           ] + '20'

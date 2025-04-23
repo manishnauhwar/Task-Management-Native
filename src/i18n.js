@@ -47,6 +47,7 @@ const resources = {
         },
       },
       taskcards: {
+        pendingTasks: 'Pending Tasks',
         addNewTask: "Add New Task",
         pleaseEnterTaskTitle: "Please enter a task title",
         pleaseEnterTaskDescription: "Please enter a task description",
@@ -155,6 +156,7 @@ const resources = {
         }
       },
       taskCard: {
+       
         noDueDate: "No due date",
         normal: "Normal",
         unknown: "Unknown",
@@ -403,6 +405,7 @@ const resources = {
         },
       },
       taskcards: {
+        pendingTasks: 'लंबित कार्य',
         addNewTask: "नई कार्य जोड़ें",
         pleaseEnterTaskTitle: "कृपया कार्य का शीर्षक दर्ज करें",
         pleaseEnterTaskDescription: "कृपया कार्य का विवरण दर्ज करें",
@@ -511,6 +514,7 @@ const resources = {
         }
       },
       taskCard: {
+       
         noDueDate: "कोई नियत तिथि नहीं",
         normal: "सामान्य",
         unknown: "अज्ञात",
