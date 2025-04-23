@@ -1,14 +1,24 @@
 import React, { useCallback } from 'react';
-import { View, StatusBar, ScrollView } from 'react-native';
+import { View, StatusBar, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import Charts from '../components/Dashboard/Charts';
 import TaskCards from '../components/Dashboard/TaskCards';
 import { useTheme } from '../utils/ThemeContext';
 import { StyleSheet } from 'react-native';
+import { useNavigationBar } from '../../App';
 
 const Dashboardscreen = () => {
   const { theme } = useTheme();
+  const { isGestureNavigationEnabled, bottomInset } = useNavigationBar();
+
+  const getExtraBottomPadding = () => {
+    const tabBarHeight = 60;
+    
+    const totalBottomPadding = tabBarHeight + (isGestureNavigationEnabled ? bottomInset : 0);
+    
+    return totalBottomPadding;
+  };
 
   // useFocusEffect(
   //   useCallback(() => {
@@ -20,14 +30,23 @@ const Dashboardscreen = () => {
   // );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+    <SafeAreaView 
+      style={[
+        styles.safeArea, 
+        { backgroundColor: theme.background }
+      ]}
+      edges={['top', 'left', 'right']}
+    >
       <StatusBar
         backgroundColor={theme.background}
         barStyle={theme.text === '#ffffff' ? "light-content" : "dark-content"}
       />
       <View style={styles.contentContainer}>
         <ScrollView
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={[
+            styles.scrollContainer,
+            { paddingBottom: getExtraBottomPadding() }
+          ]}
           nestedScrollEnabled={true}
           showsVerticalScrollIndicator={false}
         >
@@ -82,38 +101,3 @@ const styles = StyleSheet.create({
 
 export default Dashboardscreen;
 
-// import React from 'react';
-// import { SafeAreaView, ScrollView, View, Text, StatusBar } from 'react-native';
-// import Charts from '../components/Dashboard/Charts';
-// import TaskTable from '../components/Dashboard/TaskTable';
-// import { useTheme } from '../utils/ThemeContext';
-
-// const Dashboardscreen = () => {
-//   const { theme } = useTheme();
-
-//   return (
-//     <SafeAreaView
-//       className="flex-1"
-//       style={{ backgroundColor: theme.background }}
-//     >
-//       <StatusBar
-//         backgroundColor={theme.background}
-//         barStyle={theme.text === '#ffffff' ? 'light-content' : 'dark-content'}
-//       />
-//       <ScrollView
-//         nestedScrollEnabled={true}
-//         contentContainerStyle={{ paddingBottom: 20, paddingHorizontal: 10 }}
-//         className="flex-grow"
-//       >
-//         <View className="mb-5">
-//           <Charts />
-//         </View>
-//         <View className="mb-5" style={{ height: 400 }}>
-//           <TaskTable />
-//         </View>
-//       </ScrollView>
-//     </SafeAreaView>
-//   );
-// };
-
-// export default Dashboardscreen;

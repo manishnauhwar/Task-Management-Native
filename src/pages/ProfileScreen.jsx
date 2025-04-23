@@ -7,6 +7,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axiosInstance from '../utils/axiosinstance';
 import { useTranslation } from 'react-i18next';
+import { useNavigationBar } from '../../App';
 
 import UserStats from '../components/profile/UserStats';
 import AdminUserManagement from '../components/profile/AdminUserManagement';
@@ -18,6 +19,7 @@ const ProfileScreen = () => {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { theme } = useTheme();
+  const { isGestureNavigationEnabled, bottomInset } = useNavigationBar();
   const [user, setUser] = useState({});
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
@@ -130,7 +132,6 @@ const ProfileScreen = () => {
             role: processedFetchedData.role || processedUserData.role
           };
 
-          // Store only essential data in AsyncStorage
           const essentialUserData = {
             id: updatedUserData.id,
             fullname: updatedUserData.fullname,
@@ -211,7 +212,6 @@ const ProfileScreen = () => {
     try {
       console.log('Fetching all users...');
       
-      // First check if we can get a limited response directly
       try {
         const response = await axiosInstance.get('/users/alluser', {
           params: { fields: 'id,fullname,email,role' }
@@ -220,7 +220,6 @@ const ProfileScreen = () => {
         if (response.data && Array.isArray(response.data.allUsers)) {
           console.log(`Received ${response.data.allUsers.length} users`);
           
-          // Process the data with only necessary fields to minimize memory usage
           const standardizedUsers = response.data.allUsers.map(u => ({
             id: u.id || u._id,
             fullname: u.fullname,
@@ -236,7 +235,6 @@ const ProfileScreen = () => {
         console.log('Could not fetch with params, trying basic request');
       }
 
-      // Then try to fetch all users without params
       const response = await axiosInstance.get('/users/alluser');
 
       if (response.data && Array.isArray(response.data.allUsers)) {
@@ -302,13 +300,20 @@ const ProfileScreen = () => {
     setTeams(updatedTeams);
   };
 
-  // Force a fetch when role changes to admin
   useEffect(() => {
     if (user && user.role === 'admin') {
       console.log('User is admin, fetching all users...');
       fetchAllUsers();
     }
   }, [user?.role]);
+
+  const getExtraBottomPadding = () => {
+    const tabBarHeight = 60;
+    
+    const totalBottomPadding = tabBarHeight + (isGestureNavigationEnabled ? bottomInset : 0);
+    
+    return totalBottomPadding;
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -342,7 +347,10 @@ const ProfileScreen = () => {
           <ScrollView 
             style={styles.scrollContainer}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContentContainer}
+            contentContainerStyle={[
+              styles.scrollContentContainer,
+              { paddingBottom: getExtraBottomPadding() }
+            ]}
           >
             <View style={styles.container}>
               {user && user.fullname ? (
@@ -400,7 +408,7 @@ const ProfileScreen = () => {
           </ScrollView>
         ) : (
           // For manager role, use View since ManagerTeamManagement already has FlatLists
-          <View style={styles.container}>
+          <View style={[styles.container, { paddingBottom: getExtraBottomPadding() }]}>
             {user && user.fullname ? (
               <View style={[styles.section, {
                 backgroundColor: theme.cardBackground,

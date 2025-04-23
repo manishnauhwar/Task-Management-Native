@@ -386,10 +386,11 @@ const TaskCards = () => {
             { 
               backgroundColor: theme.cardBackground,
               borderColor: theme.border,
+              maxHeight: '90%',
             }
           ]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]} adjustsFontSizeToFit numberOfLines={1}>
                 {t('taskcards.addNewTask')}
               </Text>
               <TouchableOpacity 
@@ -401,111 +402,122 @@ const TaskCards = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
-              <Text style={[styles.inputLabel, { color: theme.text }]}>
-                {t('taskcards.titleLabel')}
-              </Text>
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                style={[
-                  styles.textInput, 
-                  { 
-                    backgroundColor: theme.inputBackground,
-                    color: theme.text,
-                    borderColor: theme.border,
-                  }
-                ]}
-                placeholder={t('taskcards.titleLabel')}
-                placeholderTextColor={theme.placeholderText}
-                editable={!addingTask}
-                autoCapitalize="sentences"
-                maxLength={100}
-              />
-
-              <Text style={[styles.inputLabel, { color: theme.text }]}>
-                {t('taskcards.descriptionLabel')}
-              </Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                style={[
-                  styles.textInput, 
-                  styles.textArea, 
-                  { 
-                    backgroundColor: theme.inputBackground,
-                    color: theme.text,
-                    borderColor: theme.border,
-                  }
-                ]}
-                placeholder={t('taskcards.descriptionLabel')}
-                placeholderTextColor={theme.placeholderText}
-                multiline
-                numberOfLines={4}
-                editable={!addingTask}
-                autoCapitalize="sentences"
-              />
-
-              <Text style={[styles.inputLabel, { color: theme.text }]}>
-                {t('taskcards.priorityLabel')}
-              </Text>
-              <View style={styles.priorityButtons}>
-                {['Low', 'Medium', 'High'].map((p) => (
-                  <TouchableOpacity
-                    key={p}
-                    style={[
-                      styles.priorityButton,
-                      { 
-                        backgroundColor: priority === p ? theme.primary : theme.inputBackground,
-                        borderColor: theme.border,
-                        opacity: addingTask ? 0.7 : 1
-                      }
-                    ]}
-                    onPress={() => !addingTask && setPriority(p)}
-                    disabled={addingTask}
-                  >
-                    <Text style={[
-                      styles.priorityButtonText,
-                      { color: priority === p ? theme.buttonText : theme.text }
-                    ]}>
-                      {p}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={[styles.inputLabel, { color: theme.text }]}>
-                {t('taskcards.dueDateLabel')}
-              </Text>
-              <TouchableOpacity 
-                style={[
-                  styles.datePickerButton, 
-                  { 
-                    backgroundColor: theme.inputBackground,
-                    borderColor: theme.border,
-                  }
-                ]}
-                onPress={showDatepicker}
-                disabled={addingTask}
-              >
-                <Text style={[styles.datePickerText, { color: theme.text }]}>
-                  {dueDateString}
+            <ScrollView 
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalBody}>
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskcards.titleLabel')}
                 </Text>
-                <Icon name="calendar" size={20} color={theme.text} />
-              </TouchableOpacity>
-              
-              {showDatePicker && (
-                <DateTimePicker
-                  testID="dateTimePicker"
-                  value={dueDate}
-                  mode="date"
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={onDateChange}
-                  minimumDate={new Date()}
-                  themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                <TextInput
+                  value={title}
+                  onChangeText={setTitle}
+                  style={[
+                    styles.textInput, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                      minHeight: 40,
+                      height: 'auto',
+                    }
+                  ]}
+                  placeholder={t('taskcards.titleLabel')}
+                  placeholderTextColor={theme.placeholderText}
+                  editable={!addingTask}
+                  autoCapitalize="sentences"
+                  maxLength={100}
                 />
-              )}
-            </View>
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskcards.descriptionLabel')}
+                </Text>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  style={[
+                    styles.textInput, 
+                    styles.textArea, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      color: theme.text,
+                      borderColor: theme.border,
+                      height: 'auto',
+                    }
+                  ]}
+                  placeholder={t('taskcards.descriptionLabel')}
+                  placeholderTextColor={theme.placeholderText}
+                  multiline
+                  numberOfLines={4}
+                  editable={!addingTask}
+                  autoCapitalize="sentences"
+                />
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskcards.priorityLabel')}
+                </Text>
+                <View style={styles.priorityButtons}>
+                  {['Low', 'Medium', 'High'].map((p) => (
+                    <TouchableOpacity
+                      key={p}
+                      style={[
+                        styles.priorityButton,
+                        { 
+                          backgroundColor: priority === p ? theme.primary : theme.inputBackground,
+                          borderColor: theme.border,
+                          opacity: addingTask ? 0.7 : 1
+                        }
+                      ]}
+                      onPress={() => !addingTask && setPriority(p)}
+                      disabled={addingTask}
+                    >
+                      <Text style={[
+                        styles.priorityButtonText,
+                        { color: priority === p ? theme.buttonText : theme.text }
+                      ]} numberOfLines={1} adjustsFontSizeToFit>
+                        {p}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.inputLabel, { color: theme.text }]}>
+                  {t('taskcards.dueDateLabel')}
+                </Text>
+                <TouchableOpacity 
+                  style={[
+                    styles.datePickerButton, 
+                    { 
+                      backgroundColor: theme.inputBackground,
+                      borderColor: theme.border,
+                      minHeight: 40,
+                      height: 'auto',
+                    }
+                  ]}
+                  onPress={showDatepicker}
+                  disabled={addingTask}
+                >
+                  <Text style={[styles.datePickerText, { color: theme.text }]}>
+                    {dueDateString}
+                  </Text>
+                  <Icon name="calendar" size={20} color={theme.text} />
+                </TouchableOpacity>
+                
+                {showDatePicker && (
+                  <DateTimePicker
+                    testID="dateTimePicker"
+                    value={dueDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                    minimumDate={new Date()}
+                    themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                  />
+                )}
+              </View>
+            </ScrollView>
 
             <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
               <TouchableOpacity 
@@ -514,7 +526,8 @@ const TaskCards = () => {
                   styles.cancelButton, 
                   { 
                     borderColor: theme.border,
-                    opacity: addingTask ? 0.7 : 1
+                    opacity: addingTask ? 0.7 : 1,
+                    minHeight: 44,
                   }
                 ]} 
                 onPress={closeModal}
@@ -533,7 +546,8 @@ const TaskCards = () => {
                     backgroundColor: theme.primary,
                     borderColor: theme.border,
                     borderWidth: 1,
-                    opacity: addingTask ? 0.7 : 1
+                    opacity: addingTask ? 0.7 : 1,
+                    minHeight: 44,
                   }
                 ]} 
                 onPress={handleAddTask}
@@ -631,6 +645,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
+  modalScrollView: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -646,6 +666,8 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    flex: 1,
+    paddingRight: 10,
   },
   modalBody: {
     padding: 16,
@@ -662,11 +684,9 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     marginBottom: 12,
-    height: 40,
   },
   textArea: {
     minHeight: 80,
-    height: 80,
     textAlignVertical: 'top',
     paddingTop: 12,
   },
@@ -683,11 +703,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 36,
+    minHeight: 36,
   },
   priorityButtonText: {
     fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -702,7 +723,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
   },
   cancelButton: {
     borderWidth: 1,
@@ -713,12 +733,12 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
   datePickerButton: {
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
-    height: 40,
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -520,10 +520,11 @@ const TaskTable = ({
               { 
                 backgroundColor: theme.cardBackground,
                 borderColor: theme.border,
+                maxHeight: '90%',
               }
             ]}>
               <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]} adjustsFontSizeToFit numberOfLines={1}>
                   {t('taskTable.dialog.detailsTitle')}
                 </Text>
                 <TouchableOpacity 
@@ -534,61 +535,67 @@ const TaskTable = ({
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalBody}>
-                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
-                  <Text style={[styles.detailLabel, { color: theme.text }]}>
-                    {t('taskTable.dialog.title')}
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>
-                    {selectedTask?.title}
-                  </Text>
-                </View>
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.modalBody}>
+                  <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.detailLabel, { color: theme.text }]}>
+                      {t('taskTable.dialog.title')}
+                    </Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedTask?.title}
+                    </Text>
+                  </View>
 
-                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
-                  <Text style={[styles.detailLabel, { color: theme.text }]}>
-                    {t('taskTable.dialog.description')}
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>
-                    {selectedTask?.description || t('taskTable.dialog.noDescription')}
-                  </Text>
-                </View>
+                  <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.detailLabel, { color: theme.text }]}>
+                      {t('taskTable.dialog.description')}
+                    </Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedTask?.description || t('taskTable.dialog.noDescription')}
+                    </Text>
+                  </View>
 
-                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
-                  <Text style={[styles.detailLabel, { color: theme.text }]}>
-                    {t('taskTable.dialog.status')}
-                  </Text>
-                  <View style={styles.statusContainer}>
-                    <StatusChip status={selectedTask?.status} />
-                    {selectedTask && canEditTask(selectedTask) && (
-                      <Switch
-                        value={selectedTask?.status === 'Completed'}
-                        onValueChange={() => {
-                          toggleTaskStatus(selectedTask);
-                          setIsDialogVisible(false);
-                        }}
-                        trackColor={{ false: theme.border, true: getStatusColor('Completed') }}
-                        thumbColor={theme.buttonText}
-                      />
-                    )}
+                  <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.detailLabel, { color: theme.text }]}>
+                      {t('taskTable.dialog.status')}
+                    </Text>
+                    <View style={styles.statusContainer}>
+                      <StatusChip status={selectedTask?.status} />
+                      {selectedTask && canEditTask(selectedTask) && (
+                        <Switch
+                          value={selectedTask?.status === 'Completed'}
+                          onValueChange={() => {
+                            toggleTaskStatus(selectedTask);
+                            setIsDialogVisible(false);
+                          }}
+                          trackColor={{ false: theme.border, true: getStatusColor('Completed') }}
+                          thumbColor={theme.buttonText}
+                        />
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.detailLabel, { color: theme.text }]}>
+                      {t('taskTable.dialog.priority')}
+                    </Text>
+                    <PriorityChip priority={selectedTask?.priority} />
+                  </View>
+
+                  <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.detailLabel, { color: theme.text }]}>
+                      {t('taskTable.dialog.dueDate')}
+                    </Text>
+                    <Text style={[styles.detailValue, { color: theme.text }]}>
+                      {selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : t('taskTable.dialog.noDueDate')}
+                    </Text>
                   </View>
                 </View>
-
-                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
-                  <Text style={[styles.detailLabel, { color: theme.text }]}>
-                    {t('taskTable.dialog.priority')}
-                  </Text>
-                  <PriorityChip priority={selectedTask?.priority} />
-                </View>
-
-                <View style={[styles.detailItem, { borderBottomColor: theme.border }]}>
-                  <Text style={[styles.detailLabel, { color: theme.text }]}>
-                    {t('taskTable.dialog.dueDate')}
-                  </Text>
-                  <Text style={[styles.detailValue, { color: theme.text }]}>
-                    {selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : t('taskTable.dialog.noDueDate')}
-                  </Text>
-                </View>
-              </View>
+              </ScrollView>
 
               <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
                 {selectedTask && canDeleteTask(selectedTask) && (
@@ -661,10 +668,11 @@ const TaskTable = ({
               { 
                 backgroundColor: theme.cardBackground,
                 borderColor: theme.border,
+                maxHeight: '90%',
               }
             ]}>
               <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]} adjustsFontSizeToFit numberOfLines={1}>
                   {t('taskTable.dialog.editTitle')}
                 </Text>
                 <TouchableOpacity 
@@ -677,110 +685,126 @@ const TaskTable = ({
               </View>
 
               <ScrollView 
-                style={styles.modalBody}
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
               >
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.title')}
-                </Text>
-                <TextInput
-                  value={selectedTask?.title || ''}
-                  onChangeText={text => setSelectedTask(prev => ({...prev, title: text}))}
-                  style={[
-                    styles.textInput, 
-                    { 
-                      backgroundColor: theme.inputBackground,
-                      color: theme.text,
-                      borderColor: theme.border,
-                    }
-                  ]}
-                  placeholder={t('taskTable.input.title')}
-                  placeholderTextColor={theme.placeholder}
-                  editable={!isEditing}
-                />
-
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.description')}
-                </Text>
-                <TextInput
-                  value={selectedTask?.description || ''}
-                  onChangeText={text => setSelectedTask(prev => ({...prev, description: text}))}
-                  style={[
-                    styles.textInput, 
-                    styles.textArea, 
-                    { 
-                      backgroundColor: theme.inputBackground,
-                      color: theme.text,
-                      borderColor: theme.border,
-                    }
-                  ]}
-                  placeholder={t('taskTable.input.description')}
-                  placeholderTextColor={theme.placeholder}
-                  multiline
-                  numberOfLines={4}
-                  editable={!isEditing}
-                />
-
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.priority')}
-                </Text>
-                <View style={styles.priorityButtons}>
-                  {['Low', 'Medium', 'High'].map((p) => (
-                    <TouchableOpacity
-                      key={p}
-                      style={[
-                        styles.priorityButton,
-                        { 
-                          backgroundColor: selectedTask?.priority === p ? theme.primary : theme.inputBackground,
-                          borderColor: theme.border,
-                          opacity: isEditing ? 0.7 : 1
-                        }
-                      ]}
-                      onPress={() => !isEditing && setSelectedTask(prev => ({...prev, priority: p}))}
-                      disabled={isEditing}
-                    >
-                      <Text style={[
-                        styles.priorityButtonText,
-                        { color: selectedTask?.priority === p ? theme.buttonText : theme.text }
-                      ]}>
-                        {p}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.dueDate')}
-                </Text>
-                <TouchableOpacity 
-                  style={[
-                    styles.datePickerButton, 
-                    { 
-                      backgroundColor: theme.inputBackground,
-                      borderColor: theme.border,
-                    }
-                  ]}
-                  onPress={showEditDatepicker}
-                  disabled={isEditing}
-                >
-                  <Text style={[styles.datePickerText, { color: theme.text }]}>
-                    {selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
+                <View style={styles.modalBody}>
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.title')}
                   </Text>
-                  <Icon name="calendar" size={20} color={theme.text} />
-                </TouchableOpacity>
-                
-                {showEditDatePicker && (
-                  <DateTimePicker
-                    testID="editDateTimePicker"
-                    value={selectedTask?.dueDate ? new Date(selectedTask.dueDate) : new Date()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={onEditDateChange}
-                    minimumDate={new Date()}
-                    themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                  <TextInput
+                    value={selectedTask?.title || ''}
+                    onChangeText={text => setSelectedTask(prev => ({...prev, title: text}))}
+                    style={[
+                      styles.textInput, 
+                      { 
+                        backgroundColor: theme.inputBackground,
+                        color: theme.text,
+                        borderColor: theme.border,
+                        minHeight: 40,
+                        height: 'auto',
+                      }
+                    ]}
+                    placeholder={t('taskTable.input.title')}
+                    placeholderTextColor={theme.placeholder}
+                    editable={!isEditing}
                   />
-                )}
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.description')}
+                  </Text>
+                  <TextInput
+                    value={selectedTask?.description || ''}
+                    onChangeText={text => setSelectedTask(prev => ({...prev, description: text}))}
+                    style={[
+                      styles.textInput, 
+                      styles.textArea, 
+                      { 
+                        backgroundColor: theme.inputBackground,
+                        color: theme.text,
+                        borderColor: theme.border,
+                        minHeight: 80,
+                        height: 'auto',
+                      }
+                    ]}
+                    placeholder={t('taskTable.input.description')}
+                    placeholderTextColor={theme.placeholder}
+                    multiline
+                    numberOfLines={4}
+                    editable={!isEditing}
+                  />
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.priority')}
+                  </Text>
+                  <View style={styles.priorityButtons}>
+                    {['Low', 'Medium', 'High'].map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.priorityButton,
+                          { 
+                            backgroundColor: selectedTask?.priority === p ? theme.primary : theme.inputBackground,
+                            borderColor: theme.border,
+                            opacity: isEditing ? 0.7 : 1,
+                            minHeight: 36,
+                            height: 'auto',
+                            paddingVertical: 10,
+                          }
+                        ]}
+                        onPress={() => !isEditing && setSelectedTask(prev => ({...prev, priority: p}))}
+                        disabled={isEditing}
+                      >
+                        <Text 
+                          style={[
+                            styles.priorityButtonText,
+                            { color: selectedTask?.priority === p ? theme.buttonText : theme.text }
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.dueDate')}
+                  </Text>
+                  <TouchableOpacity 
+                    style={[
+                      styles.datePickerButton, 
+                      { 
+                        backgroundColor: theme.inputBackground,
+                        borderColor: theme.border,
+                        minHeight: 40,
+                        height: 'auto',
+                      }
+                    ]}
+                    onPress={showEditDatepicker}
+                    disabled={isEditing}
+                  >
+                    <Text style={[styles.datePickerText, { color: theme.text }]}>
+                      {selectedTask?.dueDate ? formatDateForDisplay(selectedTask.dueDate) : ''}
+                    </Text>
+                    <Icon name="calendar" size={20} color={theme.text} />
+                  </TouchableOpacity>
+                  
+                  {showEditDatePicker && (
+                    <DateTimePicker
+                      testID="editDateTimePicker"
+                      value={selectedTask?.dueDate ? new Date(selectedTask.dueDate) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={onEditDateChange}
+                      minimumDate={new Date()}
+                      themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                    />
+                  )}
+                </View>
               </ScrollView>
 
               <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
@@ -790,7 +814,9 @@ const TaskTable = ({
                     styles.cancelButton, 
                     { 
                       borderColor: theme.border,
-                      opacity: isEditing ? 0.7 : 1
+                      opacity: isEditing ? 0.7 : 1,
+                      minHeight: 44,
+                      height: 'auto',
                     }
                   ]}
                   onPress={() => setIsEditDialogVisible(false)}
@@ -809,7 +835,9 @@ const TaskTable = ({
                       backgroundColor: theme.primary,
                       borderColor: theme.border,
                       borderWidth: 1,
-                      opacity: isEditing ? 0.7 : 1
+                      opacity: isEditing ? 0.7 : 1,
+                      minHeight: 44,
+                      height: 'auto',
                     }
                   ]}
                   onPress={updateTask}
@@ -842,10 +870,11 @@ const TaskTable = ({
               { 
                 backgroundColor: theme.cardBackground,
                 borderColor: theme.border,
+                maxHeight: '90%',
               }
             ]}>
               <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]} adjustsFontSizeToFit numberOfLines={1}>
                   {t('taskTable.dialog.deleteTitle')}
                 </Text>
                 <TouchableOpacity 
@@ -857,11 +886,17 @@ const TaskTable = ({
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalBody}>
-                <Text style={[styles.deleteMessage, { color: theme.text }]}>
-                  {t('taskTable.dialog.deleteMessage', { title: selectedTask?.title })}
-                </Text>
-              </View>
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.modalBody}>
+                  <Text style={[styles.deleteMessage, { color: theme.text }]}>
+                    {t('taskTable.dialog.deleteMessage', { title: selectedTask?.title })}
+                  </Text>
+                </View>
+              </ScrollView>
 
               <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
                 <TouchableOpacity
@@ -870,7 +905,9 @@ const TaskTable = ({
                     styles.cancelButton,
                     { 
                       borderColor: theme.border,
-                      opacity: isDeleting ? 0.7 : 1
+                      opacity: isDeleting ? 0.7 : 1,
+                      minHeight: 44,
+                      height: 'auto',
                     }
                   ]}
                   onPress={() => setIsDeleteDialogVisible(false)}
@@ -887,7 +924,9 @@ const TaskTable = ({
                     { 
                       backgroundColor: theme.danger,
                       borderColor: theme.danger,
-                      opacity: isDeleting ? 0.7 : 1
+                      opacity: isDeleting ? 0.7 : 1,
+                      minHeight: 44,
+                      height: 'auto',
                     }
                   ]}
                   onPress={deleteTask}
@@ -919,10 +958,11 @@ const TaskTable = ({
               { 
                 backgroundColor: theme.cardBackground,
                 borderColor: theme.border,
+                maxHeight: '90%',
               }
             ]}>
               <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]} adjustsFontSizeToFit numberOfLines={1}>
                   {t('taskTable.dialog.addTitle')}
                 </Text>
                 <TouchableOpacity 
@@ -934,111 +974,130 @@ const TaskTable = ({
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.modalBody}>
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.title')}
-                </Text>
-                <TextInput
-                  value={newTask.title}
-                  onChangeText={text => setNewTask(prev => ({...prev, title: text}))}
-                  style={[
-                    styles.textInput, 
-                    { 
-                      backgroundColor: theme.inputBackground,
-                      color: theme.text,
-                      borderColor: theme.border,
-                    }
-                  ]}
-                  placeholder={t('taskTable.input.title')}
-                  placeholderTextColor={theme.placeholder}
-                  editable={!isSubmitting}
-                  autoCapitalize="sentences"
-                  maxLength={100}
-                />
-
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.description')}
-                </Text>
-                <TextInput
-                  value={newTask.description}
-                  onChangeText={text => setNewTask(prev => ({...prev, description: text}))}
-                  style={[
-                    styles.textInput, 
-                    styles.textArea, 
-                    { 
-                      backgroundColor: theme.inputBackground,
-                      color: theme.text,
-                      borderColor: theme.border,
-                    }
-                  ]}
-                  placeholder={t('taskTable.input.description')}
-                  placeholderTextColor={theme.placeholder}
-                  multiline
-                  numberOfLines={4}
-                  editable={!isSubmitting}
-                  autoCapitalize="sentences"
-                />
-
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.priority')}
-                </Text>
-                <View style={styles.priorityButtons}>
-                  {['Low', 'Medium', 'High'].map((p) => (
-                    <TouchableOpacity
-                      key={p}
-                      style={[
-                        styles.priorityButton,
-                        { 
-                          backgroundColor: newTask.priority === p ? theme.primary : theme.inputBackground,
-                          borderColor: theme.border,
-                          opacity: isSubmitting ? 0.7 : 1
-                        }
-                      ]}
-                      onPress={() => !isSubmitting && setNewTask(prev => ({...prev, priority: p}))}
-                      disabled={isSubmitting}
-                    >
-                      <Text style={[
-                        styles.priorityButtonText,
-                        { color: newTask.priority === p ? theme.buttonText : theme.text }
-                      ]}>
-                        {p}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={[styles.inputLabel, { color: theme.text }]}>
-                  {t('taskTable.input.dueDate')}
-                </Text>
-                <TouchableOpacity 
-                  style={[
-                    styles.datePickerButton, 
-                    { 
-                      backgroundColor: theme.inputBackground,
-                      borderColor: theme.border,
-                    }
-                  ]}
-                  onPress={showAddDatepicker}
-                  disabled={isSubmitting}
-                >
-                  <Text style={[styles.datePickerText, { color: theme.text }]}>
-                    {newTask.dueDate || 'Select a date'}
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.modalBody}>
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.title')}
                   </Text>
-                  <Icon name="calendar" size={20} color={theme.text} />
-                </TouchableOpacity>
-                
-                {showAddDatePicker && (
-                  <DateTimePicker
-                    testID="addDateTimePicker"
-                    value={new Date()}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={onAddDateChange}
-                    minimumDate={new Date()}
-                    themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                  <TextInput
+                    value={newTask.title}
+                    onChangeText={text => setNewTask(prev => ({...prev, title: text}))}
+                    style={[
+                      styles.textInput, 
+                      { 
+                        backgroundColor: theme.inputBackground,
+                        color: theme.text,
+                        borderColor: theme.border,
+                        minHeight: 40,
+                        height: 'auto',
+                      }
+                    ]}
+                    placeholder={t('taskTable.input.title')}
+                    placeholderTextColor={theme.placeholder}
+                    editable={!isSubmitting}
+                    autoCapitalize="sentences"
+                    maxLength={100}
                   />
-                )}
-              </View>
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.description')}
+                  </Text>
+                  <TextInput
+                    value={newTask.description}
+                    onChangeText={text => setNewTask(prev => ({...prev, description: text}))}
+                    style={[
+                      styles.textInput, 
+                      styles.textArea, 
+                      { 
+                        backgroundColor: theme.inputBackground,
+                        color: theme.text,
+                        borderColor: theme.border,
+                        minHeight: 80,
+                        height: 'auto',
+                      }
+                    ]}
+                    placeholder={t('taskTable.input.description')}
+                    placeholderTextColor={theme.placeholder}
+                    multiline
+                    numberOfLines={4}
+                    editable={!isSubmitting}
+                    autoCapitalize="sentences"
+                  />
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.priority')}
+                  </Text>
+                  <View style={styles.priorityButtons}>
+                    {['Low', 'Medium', 'High'].map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.priorityButton,
+                          { 
+                            backgroundColor: newTask.priority === p ? theme.primary : theme.inputBackground,
+                            borderColor: theme.border,
+                            opacity: isSubmitting ? 0.7 : 1,
+                            minHeight: 36,
+                            height: 'auto',
+                            paddingVertical: 10,
+                          }
+                        ]}
+                        onPress={() => !isSubmitting && setNewTask(prev => ({...prev, priority: p}))}
+                        disabled={isSubmitting}
+                      >
+                        <Text 
+                          style={[
+                            styles.priorityButtonText,
+                            { color: newTask.priority === p ? theme.buttonText : theme.text }
+                          ]}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                        >
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={[styles.inputLabel, { color: theme.text }]}>
+                    {t('taskTable.input.dueDate')}
+                  </Text>
+                  <TouchableOpacity 
+                    style={[
+                      styles.datePickerButton, 
+                      { 
+                        backgroundColor: theme.inputBackground,
+                        borderColor: theme.border,
+                        minHeight: 40,
+                        height: 'auto',
+                      }
+                    ]}
+                    onPress={showAddDatepicker}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={[styles.datePickerText, { color: theme.text }]}>
+                      {newTask.dueDate || 'Select a date'}
+                    </Text>
+                    <Icon name="calendar" size={20} color={theme.text} />
+                  </TouchableOpacity>
+                  
+                  {showAddDatePicker && (
+                    <DateTimePicker
+                      testID="addDateTimePicker"
+                      value={new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={onAddDateChange}
+                      minimumDate={new Date()}
+                      themeVariant={theme.mode === 'dark' ? 'dark' : 'light'}
+                    />
+                  )}
+                </View>
+              </ScrollView>
 
               <View style={[styles.buttonContainer, { borderTopColor: theme.border }]}>
                 <TouchableOpacity
@@ -1047,7 +1106,9 @@ const TaskTable = ({
                     styles.cancelButton, 
                     { 
                       borderColor: theme.border,
-                      opacity: isSubmitting ? 0.7 : 1
+                      opacity: isSubmitting ? 0.7 : 1,
+                      minHeight: 44,
+                      height: 'auto',
                     }
                   ]}
                   onPress={() => setIsAddDialogVisible(false)}
@@ -1066,7 +1127,9 @@ const TaskTable = ({
                       backgroundColor: theme.primary,
                       borderColor: theme.border,
                       borderWidth: 1,
-                      opacity: isSubmitting ? 0.7 : 1
+                      opacity: isSubmitting ? 0.7 : 1,
+                      minHeight: 44,
+                      height: 'auto',
                     }
                   ]}
                   onPress={submitNewTask}
@@ -1133,6 +1196,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
+  modalScrollView: {
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1148,6 +1217,8 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
+    flex: 1,
+    paddingRight: 10,
   },
   modalBody: {
     padding: 16,
@@ -1164,7 +1235,6 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     marginBottom: 12,
-    height: 40,
   },
   priorityButtons: {
     flexDirection: 'row',
@@ -1179,11 +1249,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 36,
   },
   priorityButtonText: {
     fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -1198,7 +1268,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
   },
   cancelButton: {
     borderWidth: 1,
@@ -1209,6 +1278,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
   dialogButton: {
     minWidth: 120,
@@ -1265,11 +1335,9 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 14,
     marginBottom: 12,
-    height: 40,
   },
   textArea: {
     minHeight: 80,
-    height: 80,
     textAlignVertical: 'top',
     paddingTop: 12,
   },
@@ -1286,11 +1354,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 36,
   },
   priorityButtonText: {
     fontSize: 13,
     fontWeight: '600',
+    textAlign: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -1305,7 +1373,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
   },
   cancelButton: {
     borderWidth: 1,
@@ -1316,6 +1383,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
   detailItem: {
     paddingVertical: 12,
@@ -1346,7 +1414,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,
-    height: 40,
     marginBottom: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',

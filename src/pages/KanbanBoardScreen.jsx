@@ -9,6 +9,7 @@ import axiosInstance from "../utils/axiosinstance";
 import { Card } from "react-native-paper";
 import { getCurrentUser } from "../utils/authService"; 
 import { useTranslation } from "react-i18next";
+import { useNavigationBar } from "../../App";
 
 const Stack = createStackNavigator();
 const TasksContext = createContext();
@@ -118,17 +119,25 @@ const TaskCard = ({ task, theme }) => {
   );
 };
 
-// Status Page Component
 const StatusPage = ({ route }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { isGestureNavigationEnabled, bottomInset } = useNavigationBar();
   const { status, statusColor } = route.params;
   const { tasks } = useContext(TasksContext);
   const navigation = useNavigation();
   const filteredTasks = tasks.filter(task => task.status === status);
 
+  const getTabBarWithGestureSpacing = () => {
+    const tabBarHeight = 60;
+    return tabBarHeight + (isGestureNavigationEnabled ? bottomInset : 0);
+  };
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>      
+    <SafeAreaView 
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={['top', 'left', 'right']}
+    >      
       <StatusBar backgroundColor={statusColor} barStyle="light-content" />
       <View style={[styles.statusPageHeader, { backgroundColor: statusColor }]}>        
         <TouchableOpacity style={styles.backButtonContainer} onPress={() => navigation.goBack()}>
@@ -137,13 +146,19 @@ const StatusPage = ({ route }) => {
         <Text style={styles.statusPageTitle}>{status}</Text>
         <View style={styles.headerRight} />
       </View>
-      <View style={styles.taskListContainer}>
+      <View style={[
+        styles.taskListContainer,
+        { paddingBottom: getTabBarWithGestureSpacing() }
+      ]}>
         {filteredTasks.length > 0 ? (
           <FlatList
             data={filteredTasks}
             keyExtractor={item => item._id}
             renderItem={({ item }) => <TaskCard task={item} theme={theme} />}
-            contentContainerStyle={styles.taskList}
+            contentContainerStyle={{
+              ...styles.taskList,
+              paddingBottom: getTabBarWithGestureSpacing()
+            }}
             showsVerticalScrollIndicator={false}
           />
         ) : (
@@ -161,8 +176,14 @@ const StatusPage = ({ route }) => {
 const KanbanBoardMain = () => {
   const navigation = useNavigation();
   const { theme } = useTheme();
+  const { isGestureNavigationEnabled, bottomInset } = useNavigationBar();
   const { tasks, loading, refreshTasks } = useContext(TasksContext);
   const { t } = useTranslation();
+  
+  const getBottomSpacing = () => {
+    const tabBarHeight = 60;
+    return tabBarHeight + (isGestureNavigationEnabled ? bottomInset : 0);
+  };
 
   useFocusEffect(useCallback(() => {
     refreshTasks();
@@ -176,7 +197,10 @@ const KanbanBoardMain = () => {
   const navigateToStatus = (status, color) => navigation.navigate("StatusPage", { status, statusColor: color });
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>      
+    <SafeAreaView 
+      style={[styles.safeArea, { backgroundColor: theme.background }]}
+      edges={['top', 'left', 'right']}
+    >      
       <StatusBar backgroundColor={theme.background} barStyle={theme.statusBarStyle} />
       <View style={styles.header}>
         <TouchableOpacity style={styles.calendarButton} onPress={() => navigation.navigate("Calendar", { tasks })}>
@@ -187,7 +211,10 @@ const KanbanBoardMain = () => {
       {loading ? (
         <ActivityIndicator size="large" color={theme.primary} style={styles.loader} />
       ) : (
-        <View style={styles.mainContainer}>
+        <View style={[
+          styles.mainContainer,
+          { paddingBottom: getBottomSpacing() }
+        ]}>
           <View style={styles.statusButtonsContainer}>
             {statusOptions.map(option => (
               <StatusButton key={option.status} title={option.title} color={option.color} onPress={() => navigateToStatus(option.status, option.color)} />
@@ -298,7 +325,6 @@ const TasksProvider = ({ children }) => {
   return <TasksContext.Provider value={{ tasks, loading, user, teamMembers, updateTaskStatus, refreshTasks: loadUserAndFetchTasks, updatingTaskId }}>{children}</TasksContext.Provider>;
 };
 
-// Stack Navigator
 const KanbanStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false, cardStyle: { backgroundColor: "#fff" } }}>
     <Stack.Screen name="KanbanMain" component={KanbanBoardMain} />
@@ -306,7 +332,6 @@ const KanbanStack = () => (
   </Stack.Navigator>
 );
 
-// Exported Screen
 const KanbanBoardScreen = () => (
   <TasksProvider>
     <KanbanStack />

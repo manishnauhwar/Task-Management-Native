@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Animated,
   PanResponder,
+  useWindowDimensions,
 } from 'react-native';
 import { Card, Text, Chip, useTheme as usePaperTheme, ActivityIndicator } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -15,8 +16,18 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAs
   const paperTheme = usePaperTheme();
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { width, height } = useWindowDimensions();
   const pan = useRef(new Animated.ValueXY()).current;
   const [dragging, setDragging] = useState(false);
+
+  const cardWidth = Math.min(width * 0.9, 380);
+  const fontSize = {
+    title: Math.min(16, width / 25),
+    description: Math.min(14, width / 30),
+    date: Math.min(12, width / 35),
+    hint: Math.min(12, width / 35),
+    priority: Math.min(11, width / 40),
+  };
 
   const formatDueDate = (dateString) => {
     if (!dateString) return t('manager.noDueDate');
@@ -61,6 +72,11 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAs
 
   const styles = StyleSheet.create({
     ...taskStyles,
+    taskWrapper: {
+      marginVertical: 6,
+      width: cardWidth,
+      alignSelf: 'center',
+    },
     taskCard: {
       marginBottom: 16,
       borderRadius: 12,
@@ -73,22 +89,29 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAs
       elevation: dragging ? 8 : 3,
       opacity: isAssigning ? 0.7 : 1,
     },
+    taskCardContent: {
+      padding: 12,
+    },
     taskTitle: {
-      fontSize: 16,
+      fontSize: fontSize.title,
       fontWeight: '700',
       color: theme.text,
+      flex: 1,
+      marginRight: 10,
+      marginBottom: 4,
     },
     taskDescription: {
       color: theme.textSecondary,
-      fontSize: 14,
-      marginTop: 4,
+      fontSize: fontSize.description,
+      marginTop: 8,
+      flexWrap: 'wrap',
     },
     dateText: {
       color: theme.textSecondary,
-      fontSize: 12,
+      fontSize: fontSize.date,
     },
     dragHintText: {
-      fontSize: 12,
+      fontSize: fontSize.hint,
       fontStyle: 'italic',
       color: theme.textSecondary,
     },
@@ -104,7 +127,41 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAs
       borderRadius: 12,
       zIndex: 1,
     },
+    priorityChip: { 
+      height: Math.max(30, height / 28), 
+      borderRadius: 16, 
+      paddingHorizontal: Math.min(Math.max(12, width / 40), 20),
+      paddingVertical: 0,
+      minWidth: Math.max(70, width / 6),
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 2,
+      marginBottom: 4,
+    },
+    taskHeader: { 
+      flexDirection: 'row', 
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      marginBottom: 6,
+    },
+    taskFooter: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      marginTop: 12, 
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+    },
   });
+
+  const getPriorityText = (priority) => {
+    if (width < 350) {
+      if (priority === 'High') return t('manager.highShort', 'High');
+      if (priority === 'Medium') return t('manager.mediumShort', 'Med');
+      if (priority === 'Low') return t('manager.lowShort', 'Low');
+    }
+    return priority || t('manager.normalPriority');
+  };
 
   return (
     <Animated.View
@@ -119,15 +176,21 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAs
         )}
         <Card.Content style={styles.taskCardContent}>
           <View style={styles.taskHeader}>
-            <Text style={styles.taskTitle} numberOfLines={1}>
+            <Text style={styles.taskTitle} numberOfLines={1} adjustsFontSizeToFit>
               {task.title}
             </Text>
             <Chip
               mode="outlined"
               style={[styles.priorityChip, { borderColor: getPriorityColor(task.priority) }]}
-              textStyle={{ color: getPriorityColor(task.priority) }}
+              textStyle={{ 
+                color: getPriorityColor(task.priority), 
+                fontSize: fontSize.priority,
+                textAlign: 'center',
+                lineHeight: Math.max(20, height / 42),
+                fontWeight: '500',
+              }}
             >
-              {task.priority || t('manager.normalPriority')}
+              {getPriorityText(task.priority)}
             </Chip>
           </View>
 
@@ -141,14 +204,14 @@ const DraggableTask = ({ task, onDragStart, onDragEnd, calculateDropTarget, isAs
             <View style={styles.dateContainer}>
               <Icon
                 name="calendar-clock"
-                size={16}
+                size={Math.max(14, width / 30)}
                 color={theme.textSecondary}
                 style={{ marginRight: 4 }}
               />
               <Text style={styles.dateText}>{formatDueDate(task.dueDate)}</Text>
             </View>
             {dragging && (
-              <Text style={styles.dragHintText}>
+              <Text style={styles.dragHintText} numberOfLines={1}>
                 {t('manager.dropHint')}
               </Text>
             )}

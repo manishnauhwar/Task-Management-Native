@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { Card, Text, Avatar } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../utils/ThemeContext';
@@ -8,6 +8,15 @@ import { memberStyles } from '../../styles/manager';
 const TeamMember = ({ member, onLayout, isActive }) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const { width, height } = useWindowDimensions();
+
+  const cardWidth = Math.min(width * 0.35, 130);
+  const avatarSize = Math.min(width * 0.15, 60);
+  const fontSize = {
+    name: Math.min(14, width / 30),
+    email: Math.min(12, width / 35),
+    badge: Math.min(10, width / 45)
+  };
 
   const getInitials = (name) => {
     if (!name) return t('manager.defaultTeamMember');
@@ -43,7 +52,7 @@ const TeamMember = ({ member, onLayout, isActive }) => {
       backgroundColor: isActive ? (theme.dark ? 'rgba(58, 134, 255, 0.2)' : 'rgba(58, 134, 255, 0.1)') : 'transparent',
     },
     memberCard: {
-      width: 130,
+      width: cardWidth,
       borderRadius: 12,
       backgroundColor: theme.cardBackground,
       shadowColor: theme.dark ? '#000000' : '#000000',
@@ -55,18 +64,21 @@ const TeamMember = ({ member, onLayout, isActive }) => {
     memberCardContent: {
       alignItems: 'center',
       paddingVertical: 16,
+      paddingHorizontal: 8,
     },
     memberName: {
-      fontSize: 14,
+      fontSize: fontSize.name,
       fontWeight: '700',
       textAlign: 'center',
       marginTop: 8,
       color: theme.text,
+      width: '100%',
     },
     memberEmail: {
-      fontSize: 12,
+      fontSize: fontSize.email,
       textAlign: 'center',
       color: theme.textSecondary,
+      width: '100%',
     },
     taskCountBadge: {
       position: 'absolute',
@@ -74,14 +86,14 @@ const TeamMember = ({ member, onLayout, isActive }) => {
       top: 10,
       backgroundColor: theme.primary,
       borderRadius: 10,
-      width: 20,
-      height: 20,
+      width: Math.max(18, width / 25),
+      height: Math.max(18, width / 25),
       alignItems: 'center',
       justifyContent: 'center',
     },
     taskCountText: {
       color: '#FFFFFF',
-      fontSize: 10,
+      fontSize: fontSize.badge,
       fontWeight: 'bold',
     }
   });
@@ -91,16 +103,16 @@ const TeamMember = ({ member, onLayout, isActive }) => {
       <Card style={styles.memberCard}>
         <Card.Content style={styles.memberCardContent}>
           <Avatar.Text
-            size={60}
+            size={avatarSize}
             label={initials}
             style={{ backgroundColor: avatarColor }}
-            labelStyle={{ color: '#333' }}
+            labelStyle={{ color: '#333', fontSize: avatarSize / 2.5 }}
           />
-          <Text style={styles.memberName} numberOfLines={1}>
+          <Text style={styles.memberName} numberOfLines={1} adjustsFontSizeToFit>
             {memberName}
           </Text>
           {member.email && (
-            <Text style={styles.memberEmail} numberOfLines={1}>
+            <Text style={styles.memberEmail} numberOfLines={1} adjustsFontSizeToFit>
               {member.email}
             </Text>
           )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,6 +9,8 @@ import { NotificationProvider } from './src/utils/NotificationContext';
 import { ThemeProvider, useTheme } from './src/utils/ThemeContext';
 import { Provider as PaperProvider, DefaultTheme } from 'react-native-paper';
 import { getApps } from '@react-native-firebase/app';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Dimensions, Platform, NativeModules } from 'react-native';
 
 import LoginScreen from './src/pages/LoginScreen';
 import SignupScreen from './src/pages/SignupScreen';
@@ -40,8 +42,75 @@ const AccountStackNavigator = () => (
   </AccountStack.Navigator>
 );
 
+export const NavigationBarContext = createContext({
+  isGestureNavigationEnabled: false,
+  bottomInset: 0,
+});
+
+export const useNavigationBar = () => useContext(NavigationBarContext);
+
+const NavigationBarProvider = ({ children }: { children: React.ReactNode }) => {
+  const [isGestureNavigationEnabled, setIsGestureNavigationEnabled] = useState(false);
+  const [bottomInset, setBottomInset] = useState(0);
+
+  useEffect(() => {
+    const detectGestureNavigation = async () => {
+      if (Platform.OS === 'android') {
+        try {
+          
+          const { height, width } = Dimensions.get('window');
+          const screenHeight = Dimensions.get('screen').height;
+          const aspectRatio = height / width;
+          const windowToScreenRatio = height / screenHeight;
+          
+          const has3ButtonNavigation = windowToScreenRatio < 0.95;
+          
+          const likelyHasGestureNav = aspectRatio > 2.0 && !has3ButtonNavigation;
+          
+          if (has3ButtonNavigation) {
+            setIsGestureNavigationEnabled(true); 
+            setBottomInset(48); 
+          } else if (likelyHasGestureNav) {
+            setIsGestureNavigationEnabled(true);
+            setBottomInset(20); 
+          } else {
+            setIsGestureNavigationEnabled(false);
+            setBottomInset(0);
+          }
+        } catch (error) {
+          console.warn('Error detecting navigation type:', error);
+          setIsGestureNavigationEnabled(false);
+          setBottomInset(0);
+        }
+      } else if (Platform.OS === 'ios') {
+        const windowHeight = Dimensions.get('window').height;
+        const screenHeight = Dimensions.get('screen').height;
+        
+        const hasHomeIndicator = screenHeight > windowHeight;
+        setIsGestureNavigationEnabled(hasHomeIndicator);
+        setBottomInset(hasHomeIndicator ? 20 : 0); 
+      }
+    };
+
+    detectGestureNavigation();
+    
+    const orientationSubscription = Dimensions.addEventListener('change', detectGestureNavigation);
+    
+    return () => {
+      orientationSubscription.remove();
+    };
+  }, []);
+
+  return (
+    <NavigationBarContext.Provider value={{ isGestureNavigationEnabled, bottomInset }}>
+      {children}
+    </NavigationBarContext.Provider>
+  );
+};
+
 const DashboardTabs = () => {
   const { theme } = useTheme();
+  const { isGestureNavigationEnabled, bottomInset } = useNavigationBar();
   const [userRole, setUserRole] = useState<string | null>(null);
   const [initialRouteName, setInitialRouteName] = useState<string>('Dashboard');
 
@@ -73,7 +142,6 @@ const DashboardTabs = () => {
     getActiveTab();
   }, []);
 
-  // Function to save the current tab
   const saveCurrentTab = async (tabName: string) => {
     try {
       await AsyncStorage.setItem('@active_tab', tabName);
@@ -91,9 +159,23 @@ const DashboardTabs = () => {
         unmountOnBlur: true,
         tabBarStyle: {
           backgroundColor: theme.cardBackground,
-          height: 60,
+          height: 60, 
           borderTopWidth: 0,
           borderTopColor: theme.border,
+          paddingBottom: isGestureNavigationEnabled ? bottomInset : 0,
+          ...(isGestureNavigationEnabled && {
+            height: 60 + bottomInset,
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            elevation: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 2,
+            zIndex: 1000,
+          }),
         },
         tabBarIcon: ({ size }) => {
           let iconName = '';
@@ -160,9 +242,7 @@ const App = () => {
     },
   };
 
-  // Initialize Firebase
   useEffect(() => {
-    // Check if Firebase is already initialized using modular API
     if (getApps().length) {
       // console.log('Firebase initialized');
     }
@@ -173,25 +253,29 @@ const App = () => {
       <PaperProvider theme={theme}>
         <ThemeProvider>
           <NotificationProvider>
-            <NavigationContainer>
-              <Stack.Navigator
-                screenOptions={{ headerShown: false }}
-                initialRouteName="Loading">
-                <Stack.Screen name="Loading" component={LoadingScreen} />
-                <Stack.Screen name="Login" component={LoginScreen} />
-                <Stack.Screen name="Signup" component={SignupScreen} />
-                <Stack.Screen
-                  name="ForgotPassword"
-                  component={ForgotPasswordScreen}
-                />
-                <Stack.Screen
-                  name="ResetPassword"
-                  component={ResetPasswordScreen}
-                />
-                <Stack.Screen name="DashboardTabs" component={DashboardTabs} />
-                <Stack.Screen name="Calendar" component={CalendarScreen} />
-              </Stack.Navigator>
-            </NavigationContainer>
+            <SafeAreaProvider>
+              <NavigationBarProvider>
+                <NavigationContainer>
+                  <Stack.Navigator
+                    screenOptions={{ headerShown: false }}
+                    initialRouteName="Loading">
+                    <Stack.Screen name="Loading" component={LoadingScreen} />
+                    <Stack.Screen name="Login" component={LoginScreen} />
+                    <Stack.Screen name="Signup" component={SignupScreen} />
+                    <Stack.Screen
+                      name="ForgotPassword"
+                      component={ForgotPasswordScreen}
+                    />
+                    <Stack.Screen
+                      name="ResetPassword"
+                      component={ResetPasswordScreen}
+                    />
+                    <Stack.Screen name="DashboardTabs" component={DashboardTabs} />
+                    <Stack.Screen name="Calendar" component={CalendarScreen} />
+                  </Stack.Navigator>
+                </NavigationContainer>
+              </NavigationBarProvider>
+            </SafeAreaProvider>
           </NotificationProvider>
         </ThemeProvider>
       </PaperProvider>

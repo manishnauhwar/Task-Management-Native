@@ -4,6 +4,8 @@ import {
   StyleSheet,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Text, useTheme as usePaperTheme } from 'react-native-paper';
 import { useTheme } from '../utils/ThemeContext';
@@ -22,6 +24,7 @@ const ManagerScreen = () => {
   const { theme } = useTheme();
   const paperTheme = usePaperTheme();
   const { t } = useTranslation();
+  const { width } = useWindowDimensions();
 
   const [tasks, setTasks] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]); 
@@ -256,12 +259,14 @@ const ManagerScreen = () => {
       marginBottom: 16, 
       color: theme.text,
       fontWeight: '600',
-      marginLeft: 4
+      marginLeft: 4,
+      fontSize: Math.min(22, width / 20),
+      flexWrap: 'wrap',
     },
-    loadingText: {
-      textAlign: 'center',
-      color: theme.text,
-      marginTop: 20,
+    loadingContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 20,
     },
     emptyTeamContainer: {
       alignItems: 'center',
@@ -270,8 +275,9 @@ const ManagerScreen = () => {
     },
     emptyTeamText: {
       color: theme.text,
-      fontSize: 14,
+      fontSize: Math.min(14, width / 30),
       textAlign: 'center',
+      flexWrap: 'wrap',
     }
   });
 
@@ -287,15 +293,17 @@ const ManagerScreen = () => {
         scrollEnabled={scrollEnabled}
       >
         <View style={styles.membersContainer}>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
+          <Text variant="titleLarge" style={styles.sectionTitle} adjustsFontSizeToFit numberOfLines={1}>
             {t('manager.teamMembers')}
           </Text>
           
           {isLoading ? (
-            <Text style={styles.loadingText}>{t('common.loading')}</Text>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
           ) : teamMembers.length === 0 ? (
             <View style={styles.emptyTeamContainer}>
-              <Text style={styles.emptyTeamText}>
+              <Text style={styles.emptyTeamText} adjustsFontSizeToFit>
                 {t('manager.noTeamMembers', 'No team members available')}
               </Text>
             </View>
@@ -327,13 +335,15 @@ const ManagerScreen = () => {
         </View>
         
         <View style={styles.tasksContainer}>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
+          <Text variant="titleLarge" style={styles.sectionTitle} adjustsFontSizeToFit numberOfLines={1}>
             {t('manager.tasksToAssign')}
           </Text>
           
           {/* Handle loading and task content */}
           {isLoading ? (
-            <Text style={styles.loadingText}>{t('common.loading')}</Text>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
           ) : (
             <View style={styles.tasksGrid}>
               {tasks.length === 0 ? (

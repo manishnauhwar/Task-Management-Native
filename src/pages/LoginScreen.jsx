@@ -153,7 +153,8 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     flex: 1,
-    justifyContent: 'center',
+    marginTop: 25,
+    justifyContent: 'flex-start',
     alignItems: 'center',
   },
   title: {

@@ -20,11 +20,13 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [availableUsers, setAvailableUsers] = useState([]);
+  const [filteredAvailableUsers, setFilteredAvailableUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isTeamDetailsModalVisible, setIsTeamDetailsModalVisible] = useState(false);
   const [isCreateTeamModalVisible, setIsCreateTeamModalVisible] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
-  const [activeModalView, setActiveModalView] = useState('team'); // 'team', 'current', 'available'
+  const [activeModalView, setActiveModalView] = useState('team'); 
 
   const fetchAvailableUsers = async () => {
     try {
@@ -34,22 +36,40 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
 
       if (response.data && Array.isArray(response.data.allUsers)) {
         const filteredUsers = response.data.allUsers.filter(u => 
-          u.role === 'user' && u.id !== user.id && (!selectedTeam || 
-          !selectedTeam.members || 
-          !selectedTeam.members.some(m => (m._id || m.id) === (u._id || u.id)))
+          u.role === 'user' && u.id !== user.id
         );
 
-        setAvailableUsers(filteredUsers.map(u => ({
+        const processedUsers = filteredUsers.map(u => ({
           id: u.id || u._id,
           fullname: u.fullname,
           email: u.email,
           role: u.role
-        })));
+        }));
+        
+        setAvailableUsers(processedUsers);
+        setFilteredAvailableUsers(processedUsers);
       }
     } catch (error) {
       console.error('Error fetching available users:', error);
       Alert.alert(t('common.error'), t('teamManagement.errorFetchingUsers'));
     }
+  };
+
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    
+    if (!text.trim()) {
+      setFilteredAvailableUsers(availableUsers);
+      return;
+    }
+    
+    const query = text.toLowerCase();
+    const filtered = availableUsers.filter(
+      user => user.fullname.toLowerCase().includes(query) || 
+              user.email.toLowerCase().includes(query)
+    );
+    
+    setFilteredAvailableUsers(filtered);
   };
 
   const handleTeamPress = (team) => {
@@ -67,7 +87,7 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
 
     try {
       setLoading(prev => ({ ...prev, createTeam: true }));
-      const response = await axiosInstance.post('/teams', {
+      const response = await axiosInstance.post('/teams/post', {
         name: newTeamName,
         managerId: user.id,
         memberIds: selectedUsers
@@ -108,9 +128,6 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
         onTeamsUpdate(updatedTeams);
         setSelectedTeam(response.data);
         setTeamMembers(response.data.members || []);
-        
-        // Remove the added user from available users
-        setAvailableUsers(availableUsers.filter(u => u.id !== userId));
         
         Alert.alert(t('common.success'), t('teamManagement.memberAdded'));
       }
@@ -166,6 +183,7 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
   const openCreateTeamModal = () => {
     fetchAvailableUsers();
     setIsCreateTeamModalVisible(true);
+    setSearchQuery('');
   };
 
   const renderTeamDetails = () => {
@@ -289,34 +307,74 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={availableUsers}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <View style={[styles.memberItem, { borderBottomColor: theme.border }]}>
-                  <View style={styles.memberInfo}>
-                    <Text style={[styles.memberName, { color: theme.text }]}>
-                      {item.fullname}
-                    </Text>
-                    <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
-                      {item.email}
-                    </Text>
-                  </View>
+            <>
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={[styles.searchInput, {
+                    backgroundColor: theme.inputBackground,
+                    borderColor: theme.border,
+                    color: theme.text
+                  }]}
+                  placeholder={t('sortFilter.searchPlaceholder')}
+                  placeholderTextColor={theme.placeholder}
+                  value={searchQuery}
+                  onChangeText={handleSearch}
+                />
+                {searchQuery.length > 0 && (
                   <TouchableOpacity
-                    style={[styles.addButton, { backgroundColor: theme.success }]}
-                    onPress={() => handleAddMember(item.id)}
-                    disabled={loading[item.id]}
+                    style={styles.clearButton}
+                    onPress={() => handleSearch('')}
                   >
-                    {loading[item.id] ? (
-                      <ActivityIndicator size="small" color={theme.buttonText} />
-                    ) : (
-                      <Icon name="add" size={18} color={theme.buttonText} />
-                    )}
+                    <Icon name="close" size={20} color={theme.textSecondary} />
                   </TouchableOpacity>
-                </View>
-              )}
-              style={styles.membersList}
-            />
+                )}
+              </View>
+              <FlatList
+                data={filteredAvailableUsers}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => {
+                  const isAlreadyInTeam = selectedTeam?.members?.some(
+                    m => (m._id || m.id) === item.id
+                  );
+                  
+                  return (
+                    <View style={[styles.memberItem, { borderBottomColor: theme.border }]}>
+                      <View style={styles.memberInfo}>
+                        <Text style={[styles.memberName, { color: theme.text }]}>
+                          {item.fullname}
+                        </Text>
+                        <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
+                          {item.email}
+                        </Text>
+                        {isAlreadyInTeam && (
+                          <Text style={[styles.memberTag, { color: theme.success }]}>
+                            {t('teamManagement.alreadyInTeam')}
+                          </Text>
+                        )}
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.addButton, 
+                          { 
+                            backgroundColor: isAlreadyInTeam ? theme.border : theme.success,
+                            opacity: isAlreadyInTeam ? 0.5 : 1
+                          }
+                        ]}
+                        onPress={() => handleAddMember(item.id)}
+                        disabled={loading[item.id] || isAlreadyInTeam}
+                      >
+                        {loading[item.id] ? (
+                          <ActivityIndicator size="small" color={theme.buttonText} />
+                        ) : (
+                          <Icon name="add" size={18} color={theme.buttonText} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }}
+                style={styles.membersList}
+              />
+            </>
           )
         )}
       </>
@@ -433,44 +491,67 @@ const ManagerTeamManagement = ({ teams, user, theme, onTeamsUpdate }) => {
                 {t('teamManagement.noAvailableUsers')}
               </Text>
             ) : (
-              <FlatList
-                data={availableUsers}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => {
-                  const isSelected = selectedUsers.includes(item.id);
-                  return (
+              <>
+                <View style={styles.searchContainer}>
+                  <TextInput
+                    style={[styles.searchInput, {
+                      backgroundColor: theme.inputBackground,
+                      borderColor: theme.border,
+                      color: theme.text
+                    }]}
+                    placeholder={t('sortFilter.searchPlaceholder')}
+                    placeholderTextColor={theme.placeholder}
+                    value={searchQuery}
+                    onChangeText={handleSearch}
+                  />
+                  {searchQuery.length > 0 && (
                     <TouchableOpacity
-                      style={[
-                        styles.userSelectItem,
-                        { 
-                          backgroundColor: isSelected ? theme.success + '20' : theme.inputBackground,
-                          borderColor: theme.border 
-                        }
-                      ]}
-                      onPress={() => handleUserSelect(item.id)}
+                      style={styles.clearButton}
+                      onPress={() => handleSearch('')}
                     >
-                      <View style={styles.memberInfo}>
-                        <Text style={[styles.memberName, { color: theme.text }]}>
-                          {item.fullname}
-                        </Text>
-                        <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
-                          {item.email}
-                        </Text>
-                      </View>
-                      <View style={[
-                        styles.checkBox,
-                        { 
-                          borderColor: isSelected ? theme.success : theme.border,
-                          backgroundColor: isSelected ? theme.success : 'transparent'
-                        }
-                      ]}>
-                        {isSelected && <Icon name="check" size={16} color={theme.buttonText} />}
-                      </View>
+                      <Icon name="close" size={20} color={theme.textSecondary} />
                     </TouchableOpacity>
-                  );
-                }}
-                style={styles.membersList}
-              />
+                  )}
+                </View>
+                <FlatList
+                  data={filteredAvailableUsers}
+                  keyExtractor={(item) => item.id.toString()}
+                  renderItem={({ item }) => {
+                    const isSelected = selectedUsers.includes(item.id);
+                    return (
+                      <TouchableOpacity
+                        style={[
+                          styles.userSelectItem,
+                          { 
+                            backgroundColor: isSelected ? theme.success + '20' : theme.inputBackground,
+                            borderColor: theme.border 
+                          }
+                        ]}
+                        onPress={() => handleUserSelect(item.id)}
+                      >
+                        <View style={styles.memberInfo}>
+                          <Text style={[styles.memberName, { color: theme.text }]}>
+                            {item.fullname}
+                          </Text>
+                          <Text style={[styles.memberEmail, { color: theme.textSecondary }]}>
+                            {item.email}
+                          </Text>
+                        </View>
+                        <View style={[
+                          styles.checkBox,
+                          { 
+                            borderColor: isSelected ? theme.success : theme.border,
+                            backgroundColor: isSelected ? theme.success : 'transparent'
+                          }
+                        ]}>
+                          {isSelected && <Icon name="check" size={16} color={theme.buttonText} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                  style={styles.membersList}
+                />
+              </>
             )}
 
             <TouchableOpacity
@@ -632,6 +713,11 @@ const styles = StyleSheet.create({
   memberEmail: {
     fontSize: 13,
   },
+  memberTag: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
   addButton: {
     width: 30,
     height: 30,
@@ -686,6 +772,22 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    paddingHorizontal: 10,
+  },
+  clearButton: {
+    padding: 8,
   },
 });
 
